@@ -28,12 +28,12 @@ func (client *BailianClient) DeleteFile(fileId string) error {
 	runtime := &util.RuntimeOptions{}
 	headers := make(map[string]*string)
 
-	log.Infof("Deleting file with ID: %s in workspace: %s", fileId, client.config.BailianWorkspaceId)
+	log.Infof("Deleting file with ID: %#v in workspace: %#v", fileId, client.config.BailianWorkspaceId)
 
 	// 调用API删除文件
 	response, err := client.Client.DeleteFileWithOptions(
-		tea.String(client.config.BailianWorkspaceId),
 		tea.String(fileId),
+		tea.String(client.config.BailianWorkspaceId),
 		headers,
 		runtime,
 	)
