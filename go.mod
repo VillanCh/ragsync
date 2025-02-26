@@ -7,9 +7,9 @@ require (
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.10
 	github.com/alibabacloud-go/tea v1.3.2
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
-	github.com/davecgh/go-spew v1.1.1
 	github.com/urfave/cli v1.22.16
 	github.com/yaklang/yaklang v1.3.3
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -27,6 +27,7 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/corpix/uarand v0.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
@@ -84,5 +85,4 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

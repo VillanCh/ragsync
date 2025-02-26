@@ -71,12 +71,48 @@ RAG SYNC is a command-line tool for managing Alibaba Cloud Bailian knowledge bas
 Install directly using the Go toolchain:
 
 ```bash
-go install github.com/VillanCh/ragsync@latest
+# 安装最新版本，生成名为 ragsync 的可执行文件
+# Install the latest version, generate an executable named ragsync
+go install github.com/VillanCh/ragsync/cmd/ragsync@latest
 ```
 
 安装完成后，可以直接在命令行中使用 `ragsync` 命令。
 
 After installation, you can use the `ragsync` command directly in the command line.
+
+#### 排障指南 | Troubleshooting Guide
+
+如果 `which ragsync` 或 `where ragsync` 命令找不到已安装的程序，请检查以下几点：
+
+If the `which ragsync` or `where ragsync` command cannot find the installed program, please check the following:
+
+1. **检查 Go 的安装路径** | **Check Go installation path**:
+   ```bash
+   # 查看 Go 安装的可执行文件路径 | Check the path where Go installs executables
+   go env GOPATH
+   ```
+   
+   确保 `$GOPATH/bin` 已添加到系统的 PATH 环境变量中：
+   
+   Make sure `$GOPATH/bin` is added to your system's PATH environment variable:
+   
+   ```bash
+   # 在 Linux/Mac 上 | On Linux/Mac
+   echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.bashrc
+   source ~/.bashrc
+   
+   # 或对于 Zsh shell | Or for Zsh shell
+   echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.zshrc
+   source ~/.zshrc
+   
+   # 在 Windows 上，请添加到系统环境变量中 | On Windows, add to system environment variables
+   ```
+
+2. **直接运行可执行文件** | **Run the executable directly**:
+   ```bash
+   # 找到并运行可执行文件 | Find and run the executable
+   $(go env GOPATH)/bin/ragsync
+   ```
 
 ### 方式二：本地编译 | Method 2: Local Build
 
