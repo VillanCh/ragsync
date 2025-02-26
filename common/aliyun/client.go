@@ -41,7 +41,7 @@ func NewBailianClient(accessKeyID, accessKeySecret, endpoint string) (*BailianCl
 
 	client, err := bailian20231229.NewClient(config)
 	if err != nil {
-		return nil, utils.Errorf("创建百炼客户端失败: %v", err)
+		return nil, utils.Errorf("Failed to create Bailian client: %v", err)
 	}
 
 	return &BailianClient{

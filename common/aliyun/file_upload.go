@@ -25,12 +25,12 @@ type FileUploadLease struct {
 // ApplyFileUploadLease 申请文件上传租约
 func (client *BailianClient) ApplyFileUploadLease(fileName string, content []byte) (*FileUploadLease, error) {
 	if client.workspaceId == "" {
-		return nil, utils.Error("workspaceId 未设置")
+		return nil, utils.Error("Workspace ID is not set")
 	}
 
 	ext := filepath.Ext(fileName)
 	if ext == "" {
-		return nil, utils.Error("文件扩展名不能为空")
+		return nil, utils.Error("File extension cannot be empty")
 	}
 
 	md5Str := utils.CalcMd5(string(content))
@@ -63,22 +63,22 @@ func (client *BailianClient) ApplyFileUploadLease(fileName string, content []byt
 					if m, ok := data.(map[string]interface{}); ok {
 						recommend, ok := m["Recommend"]
 						if ok {
-							log.Errorf("详细错误信息: %v", recommend)
+							log.Errorf("Detailed error information: %v", recommend)
 						}
 					}
 				}
 			}
 		}
-		return nil, utils.Errorf("申请文件上传租约失败: %v", err)
+		return nil, utils.Errorf("Failed to apply for file upload lease: %v", err)
 	}
 
 	// 解析响应
 	if response == nil || response.Body == nil {
-		return nil, utils.Errorf("申请文件上传租约响应为空")
+		return nil, utils.Errorf("File upload lease response is empty")
 	}
 
 	if !tea.BoolValue(response.Body.Success) {
-		return nil, utils.Errorf("申请文件上传租约失败: %v", response.Body.Message)
+		return nil, utils.Errorf("Failed to apply for file upload lease: %v", response.Body.Message)
 	}
 
 	lease := &FileUploadLease{

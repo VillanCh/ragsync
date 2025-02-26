@@ -49,3 +49,4 @@ gen
 .antlr/
 common/xlic/*.gzip
 .go-version
+ragsync.yaml

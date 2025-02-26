@@ -13,7 +13,7 @@ func UploadFile(method string, uploadURL string, fileName string, contentType st
 	// 获取文件扩展名
 	ext := filepath.Ext(fileName)
 	if ext == "" {
-		return utils.Errorf("文件扩展名不能为空")
+		return utils.Errorf("File extension cannot be empty")
 	}
 
 	rsp, req, err := poc.Do(
@@ -23,7 +23,7 @@ func UploadFile(method string, uploadURL string, fileName string, contentType st
 		poc.WithReplaceHttpPacketHeader("X-bailian-extra", bailianExtra),
 	)
 	if err != nil {
-		return utils.Errorf("上传文件失败: %v", err)
+		return utils.Errorf("Failed to upload file: %v", err)
 	}
 	_ = req
 	fmt.Println(string(rsp.RawRequest))
