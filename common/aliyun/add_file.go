@@ -13,12 +13,14 @@ import (
 
 // AddFile 将已上传的文件添加到百炼服务
 func (client *BailianClient) AddFile(leaseId string) error {
-	if client.workspaceId == "" {
+	if client.config == nil {
+		return utils.Error("Client configuration is not set")
+	}
+
+	if client.config.BailianWorkspaceId == "" {
 		return utils.Error("Workspace ID is not set")
 	}
 
-	// donot edit this parser
-	parser := "DASHSCOPE_DOCMIND"
 	if leaseId == "" {
 		return utils.Error("Lease ID cannot be empty")
 	}
@@ -26,9 +28,9 @@ func (client *BailianClient) AddFile(leaseId string) error {
 	// 创建添加文件请求
 	addFileRequest := &bailian20231229.AddFileRequest{
 		LeaseId:      tea.String(leaseId),
-		Parser:       tea.String(parser),
-		CategoryId:   tea.String("default"),
-		CategoryType: tea.String("UNSTRUCTURED"),
+		Parser:       tea.String(client.config.BailianAddFileParser),
+		CategoryId:   tea.String(client.config.BailianFilesDefaultCategoryId),
+		CategoryType: tea.String(client.config.BailianCategoryType),
 	}
 
 	runtime := &util.RuntimeOptions{}
@@ -36,7 +38,7 @@ func (client *BailianClient) AddFile(leaseId string) error {
 
 	// 调用API
 	response, err := client.Client.AddFileWithOptions(
-		tea.String(client.workspaceId),
+		tea.String(client.config.BailianWorkspaceId),
 		addFileRequest,
 		headers,
 		runtime,

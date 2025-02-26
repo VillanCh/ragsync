@@ -24,7 +24,11 @@ type FileUploadLease struct {
 
 // ApplyFileUploadLease 申请文件上传租约
 func (client *BailianClient) ApplyFileUploadLease(fileName string, content []byte) (*FileUploadLease, error) {
-	if client.workspaceId == "" {
+	if client.config == nil {
+		return nil, utils.Error("Client configuration is not set")
+	}
+
+	if client.config.BailianWorkspaceId == "" {
 		return nil, utils.Error("Workspace ID is not set")
 	}
 
@@ -35,7 +39,7 @@ func (client *BailianClient) ApplyFileUploadLease(fileName string, content []byt
 
 	md5Str := utils.CalcMd5(string(content))
 	request := &bailian20231229.ApplyFileUploadLeaseRequest{
-		CategoryType: tea.String("UNSTRUCTURED"),
+		CategoryType: tea.String(client.config.BailianCategoryType),
 		FileName:     tea.String(fileName),
 		Md5:          tea.String(md5Str),
 		SizeInBytes:  tea.String(strconv.Itoa(len(content))),
@@ -45,8 +49,8 @@ func (client *BailianClient) ApplyFileUploadLease(fileName string, content []byt
 
 	// 调用 API
 	response, err := client.Client.ApplyFileUploadLeaseWithOptions(
-		tea.String("default"),
-		tea.String(client.workspaceId),
+		tea.String(client.config.BailianFilesDefaultCategoryId),
+		tea.String(client.config.BailianWorkspaceId),
 		request,
 		headers,
 		runtime,
