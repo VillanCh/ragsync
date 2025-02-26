@@ -199,6 +199,15 @@ ragsync sync --file /path/to/file.txt --force
 
 # 强制上传但保留原有索引条目（不删除旧索引）| Force upload but preserve existing index entries (don't delete old index)
 ragsync sync --file /path/to/file.txt --force --skip-index-delete
+
+# 批量上传目录中的所有支持文件 | Batch upload all supported files in a directory
+ragsync sync --dir /path/to/directory
+
+# 批量上传特定类型的文件 | Batch upload specific types of files
+ragsync sync --dir /path/to/directory --ext ".txt,.pdf,.docx"
+
+# 强制批量上传目录中的所有文件 | Force batch upload all files in a directory
+ragsync sync --dir /path/to/directory --force
 ```
 
 ### 列出文件 | List Files
@@ -264,6 +273,8 @@ ragsync index-status --job-id "job-id"
 | 参数 | Parameter | 描述 | Description |
 |------|-----------|------|-------------|
 | --file | --file | 要上传的文件路径 | File path to upload |
+| --dir | --dir | 要递归扫描并上传文件的目录路径 | Directory path to recursively scan and upload files |
+| --ext | --ext | 与--dir一起使用时要上传的文件扩展名（逗号分隔，如 '.txt,.pdf,.md'）| File extensions to upload when using --dir (comma separated, e.g. '.txt,.pdf,.md') |
 | --force, -f | --force, -f | 强制上传（即使文件已存在）| Force upload even if file exists |
 | --no-index, -n | --no-index, -n | 跳过将文件添加到知识索引 | Skip adding the file to knowledge index |
 | --skip-index-delete, -s | --skip-index-delete, -s | 替换文件时，跳过从知识索引中先删除文件（保留索引条目）| When replacing files, skip removing them from the knowledge index first (preserves index entries) |
@@ -351,6 +362,22 @@ ragsync sync --file /path/to/updated-document.pdf --force --skip-index-delete
 # 将新文件添加到知识索引（现在会有两个索引条目指向不同版本）
 # Add the new file to the knowledge index (now there will be two index entries pointing to different versions)
 ragsync add-job --name "updated-document.pdf"
+```
+
+### 示例 4：批量上传目录中的文件 | Example 4: Batch upload files in a directory
+
+```bash
+# 使用默认扩展名批量上传目录中的文件
+# Batch upload files in a directory with default extensions
+ragsync sync --dir /path/to/documents
+
+# 上传所有PDF和DOCX文件到知识库并添加到索引
+# Upload all PDF and DOCX files to the knowledge base and add to index
+ragsync sync --dir /path/to/documents --ext ".pdf,.docx"
+
+# 强制替换所有已存在的文件，保留原有索引条目
+# Force replace all existing files, preserving original index entries
+ragsync sync --dir /path/to/documents --force --skip-index-delete
 ```
 
 ## 注意事项 | Notes

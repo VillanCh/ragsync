@@ -3,12 +3,14 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/urfave/cli"
 
 	"github.com/VillanCh/ragsync/common/aliyun"
+	"github.com/VillanCh/ragsync/common/spec"
 
 	"github.com/yaklang/yaklang/common/log"
 	"github.com/yaklang/yaklang/common/utils"
@@ -24,6 +26,15 @@ func SyncCommand() cli.Command {
 			cli.StringFlag{
 				Name:  "file",
 				Usage: "File path to upload",
+			},
+			cli.StringFlag{
+				Name:  "dir",
+				Usage: "Directory path to recursively scan and upload files",
+			},
+			cli.StringFlag{
+				Name:  "ext",
+				Usage: "File extensions to upload when using --dir (comma separated, e.g. '.txt,.pdf,.md')",
+				Value: ".txt,.md,.markdown,.json,.pdf,.doc,.docx",
 			},
 			cli.BoolFlag{
 				Name:  "force,f",
@@ -51,8 +62,16 @@ func executeSync(c *cli.Context) error {
 	}
 
 	filePath := c.String("file")
-	if filePath == "" {
-		return utils.Errorf("Please specify the file path to upload")
+	dirPath := c.String("dir")
+
+	// 文件和目录参数必须至少提供一个
+	if filePath == "" && dirPath == "" {
+		return utils.Errorf("Please specify either file path (--file) or directory path (--dir) to upload")
+	}
+
+	// 文件和目录参数不能同时提供
+	if filePath != "" && dirPath != "" {
+		return utils.Errorf("Cannot specify both --file and --dir at the same time")
 	}
 
 	forceUpload := c.Bool("force")
@@ -67,6 +86,103 @@ func executeSync(c *cli.Context) error {
 		return utils.Errorf("Cannot add to knowledge index: BailianKnowledgeIndexId is not configured in your config file")
 	}
 
+	client, err := aliyun.NewBailianClientFromConfig(config)
+	if err != nil {
+		return err
+	}
+
+	// 如果指定了目录，则遍历目录并上传符合条件的文件
+	if dirPath != "" {
+		extensions := strings.Split(c.String("ext"), ",")
+		// 去除可能存在的空格
+		for i := range extensions {
+			extensions[i] = strings.TrimSpace(extensions[i])
+		}
+
+		return processDirUpload(dirPath, extensions, client, config, forceUpload, addToIndex, skipIndexDelete)
+	}
+
+	// 处理单个文件上传
+	return processFileUpload(filePath, client, config, forceUpload, addToIndex, skipIndexDelete)
+}
+
+// processDirUpload 处理目录递归上传
+func processDirUpload(dirPath string, extensions []string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool) error {
+	// 检查目录是否存在
+	dirInfo, err := os.Stat(dirPath)
+	if err != nil {
+		return utils.Errorf("Failed to access directory: %v", err)
+	}
+
+	if !dirInfo.IsDir() {
+		return utils.Errorf("The specified path is not a directory: %s", dirPath)
+	}
+
+	// 存储上传成功和失败的文件计数
+	successCount := 0
+	failedCount := 0
+	skippedCount := 0
+
+	log.Infof("Scanning directory: %s", dirPath)
+	log.Infof("File extensions to process: %s", strings.Join(extensions, ", "))
+
+	// 遍历目录中的所有文件
+	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Warnf("Error accessing path %s: %v", path, err)
+			return nil
+		}
+
+		// 跳过目录
+		if info.IsDir() {
+			return nil
+		}
+
+		// 检查文件扩展名是否符合要求
+		ext := strings.ToLower(filepath.Ext(path))
+		if !isExtensionAllowed(ext, extensions) {
+			skippedCount++
+			return nil
+		}
+
+		log.Infof("Processing file: %s", path)
+
+		// 使用与单文件上传相同的逻辑处理
+		err = processFileUpload(path, client, config, forceUpload, addToIndex, skipIndexDelete)
+		if err != nil {
+			log.Errorf("Failed to upload file %s: %v", path, err)
+			failedCount++
+		} else {
+			successCount++
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return utils.Errorf("Failed to walk directory: %v", err)
+	}
+
+	// 打印处理结果摘要
+	log.Infof("Directory processing completed: %s", dirPath)
+	log.Infof("Results: %d files processed, %d uploaded successfully, %d failed, %d skipped (wrong extension)",
+		successCount+failedCount+skippedCount, successCount, failedCount, skippedCount)
+
+	return nil
+}
+
+// isExtensionAllowed 检查文件扩展名是否在允许的列表中
+func isExtensionAllowed(ext string, allowedExtensions []string) bool {
+	for _, allowed := range allowedExtensions {
+		if strings.EqualFold(ext, allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+// processFileUpload 处理单个文件上传
+func processFileUpload(filePath string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool) error {
 	// 获取本地文件信息
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
@@ -77,11 +193,6 @@ func executeSync(c *cli.Context) error {
 	fileModTime := fileInfo.ModTime()
 
 	fileContent, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	client, err := aliyun.NewBailianClientFromConfig(config)
 	if err != nil {
 		return err
 	}
@@ -217,7 +328,7 @@ func executeSync(c *cli.Context) error {
 		} else {
 			log.Warnf("File was processed, but no job ID was returned. The file may still be added to the index.")
 		}
-	} else if skipIndex {
+	} else if !addToIndex {
 		log.Info("Skipping knowledge index step (--no-index was specified)")
 	}
 
