@@ -4,42 +4,64 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g.: v1.0.0)'
+        required: true
+        default: 'v0.0.0'
 
 jobs:
   release:
-    name: 构建与发布
+    name: Build and Release
     runs-on: ubuntu-latest
     steps:
-      - name: 检出代码
+      - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: 设置 Go 环境
+      - name: Setup Go environment
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
+          cache-dependency-path: "go.sum"
 
-      - name: 获取版本号
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Get version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: 构建 Linux 版本
+      - name: Build Linux version
         run: |
           mkdir -p build
           GOOS=linux GOARCH=amd64 go build -o build/ragsync-linux-amd64 -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
 
-      - name: 构建 macOS 版本
+      - name: Build macOS version
         run: |
           GOOS=darwin GOARCH=amd64 go build -o build/ragsync-darwin-amd64 -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
           GOOS=darwin GOARCH=arm64 go build -o build/ragsync-darwin-arm64 -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
 
-      - name: 构建 Windows 版本
+      - name: Build Windows version
         run: |
           GOOS=windows GOARCH=amd64 go build -o build/ragsync-windows-amd64.exe -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
 
-      - name: 创建 ZIP 文件
+      - name: Create ZIP files
         run: |
           cd build
           zip -r ragsync-linux-amd64.zip ragsync-linux-amd64
@@ -48,17 +70,64 @@ jobs:
           zip -r ragsync-windows-amd64.zip ragsync-windows-amd64.exe
           cd ..
       
-      - name: download yak binary
+      - name: Download yak tool
         run: wget -q -O './yak' https://aliyun-oss.yaklang.com/yak/ci/yak_linux_amd64 && chmod +x ./yak
       
-      - name: upload ragsync binary to yak-oss
+      - name: Upload binaries to OSS
+        id: upload_oss
         run: |
-          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-linux-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_linux_amd64'
-          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-darwin-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_darwin_amd64'
-          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-darwin-arm64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_darwin_arm64'
-          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-windows-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_windows_amd64.exe'
+          set -e
+          
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'build/ragsync-linux-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_linux_amd64'
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'build/ragsync-darwin-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_darwin_amd64'
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'build/ragsync-darwin-arm64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_darwin_arm64'
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'build/ragsync-windows-amd64.exe:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_windows_amd64.exe'
+          
+          echo "All files uploaded successfully"
+          
+          echo "version=${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+      
+      - name: Create and upload version info file
+        run: |
+          # Create version info file
+          echo "${{ steps.get_version.outputs.VERSION }}" > version.txt
+          
+          # Upload version info file
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'version.txt:/ragsync/latest/version.txt'
+          
+          echo "Version info file uploaded to /ragsync/latest/version.txt"
 
-      - name: 创建 Release
+      - name: Verify OSS upload
+        run: |
+          echo "Verifying files uploaded to OSS..."
+          sleep 5
+          
+          for file in linux_amd64 darwin_amd64 darwin_arm64 windows_amd64.exe; do
+            URL="https://aliyun-oss.yaklang.com/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_${file}"
+            echo "Checking: ${URL}"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${URL}")
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "Error: File $file upload verification failed! HTTP status code: ${HTTP_CODE}"
+              exit 1
+            else
+              echo "Verification successful: ${URL} (HTTP ${HTTP_CODE})"
+            fi
+          done
+          
+          # Verify version file
+          VERSION_URL="https://aliyun-oss.yaklang.com/ragsync/latest/version.txt"
+          echo "Checking version file: ${VERSION_URL}"
+          VERSION_CONTENT=$(curl -s "${VERSION_URL}")
+          if [ "$VERSION_CONTENT" != "${{ steps.get_version.outputs.VERSION }}" ]; then
+            echo "Error: Version file content doesn't match! Expected: ${{ steps.get_version.outputs.VERSION }}, Actual: ${VERSION_CONTENT}"
+            exit 1
+          else
+            echo "Version file verification successful: ${VERSION_URL} (Content: ${VERSION_CONTENT})"
+          fi
+          
+          echo "All file upload verifications passed!"
+
+      - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -69,7 +138,7 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: 上传 Linux 二进制文件
+      - name: Upload Linux binary
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -79,7 +148,7 @@ jobs:
           asset_name: ragsync-linux-amd64.zip
           asset_content_type: application/zip
 
-      - name: 上传 macOS (Intel) 二进制文件
+      - name: Upload macOS (Intel) binary
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -89,7 +158,7 @@ jobs:
           asset_name: ragsync-darwin-amd64.zip
           asset_content_type: application/zip
 
-      - name: 上传 macOS (Apple Silicon) 二进制文件
+      - name: Upload macOS (Apple Silicon) binary
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -99,7 +168,7 @@ jobs:
           asset_name: ragsync-darwin-arm64.zip
           asset_content_type: application/zip
 
-      - name: 上传 Windows 二进制文件
+      - name: Upload Windows binary
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
