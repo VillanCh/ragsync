@@ -73,7 +73,7 @@ Install directly using the Go toolchain:
 ```bash
 # 安装最新版本，生成名为 ragsync 的可执行文件
 # Install the latest version, generate an executable named ragsync
-go install github.com/VillanCh/ragsync/cmd/ragsync@latest
+go install github.com/VillanCh/ragsync@latest
 ```
 
 安装完成后，可以直接在命令行中使用 `ragsync` 命令。
