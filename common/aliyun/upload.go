@@ -1,9 +1,9 @@
 package aliyun
 
 import (
-	"fmt"
 	"path/filepath"
 
+	"github.com/yaklang/yaklang/common/log"
 	"github.com/yaklang/yaklang/common/utils"
 	"github.com/yaklang/yaklang/common/utils/lowhttp/poc"
 )
@@ -26,32 +26,7 @@ func UploadFile(method string, uploadURL string, fileName string, contentType st
 		return utils.Errorf("Failed to upload file: %v", err)
 	}
 	_ = req
-	fmt.Println(string(rsp.RawRequest))
-	fmt.Println(string(rsp.RawPacket))
+	_ = rsp
+	log.Infof("Upload file success: %s", fileName)
 	return nil
-}
-
-// getContentType 根据文件扩展名获取内容类型
-func getContentType(filePath string) string {
-	ext := filepath.Ext(filePath)
-	switch ext {
-	case ".pdf":
-		return "application/pdf"
-	case ".txt":
-		return "text/plain"
-	case ".doc":
-		return "application/msword"
-	case ".docx":
-		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-	case ".xls":
-		return "application/vnd.ms-excel"
-	case ".xlsx":
-		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	case ".ppt":
-		return "application/vnd.ms-powerpoint"
-	case ".pptx":
-		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-	default:
-		return "application/octet-stream"
-	}
 }
