@@ -21,10 +21,8 @@
    **Principle of Least Privilege** - Assign only the minimum necessary permissions to RAM users:
    
    - Bailian 相关 API 的权限
-   - OSS 存储相关权限（用于文件上传）
    
    - Permissions for Bailian-related APIs
-   - OSS storage-related permissions (for file uploading)
 
 4. **百炼控制台授权** - 在阿里云百炼控制台中，确保为 RAM 用户授予相应的工作空间权限。
    
@@ -58,9 +56,9 @@
 
 ## 项目简介 | Project Introduction
 
-RAG SYNC 是一个用于管理阿里云百炼知识库的命令行工具，支持上传、删除、查询文件等操作。
+RAG SYNC 是一个用于管理阿里云百炼知识库的命令行工具，支持上传、删除、查询文件和管理知识索引等操作。
 
-RAG SYNC is a command-line tool for managing Alibaba Cloud Bailian knowledge base, supporting operations such as uploading, deleting, and querying files.
+RAG SYNC is a command-line tool for managing Alibaba Cloud Bailian knowledge base, supporting operations such as uploading, deleting, querying files, and managing knowledge indices.
 
 ## 安装 | Installation
 
@@ -73,7 +71,7 @@ Install directly using the Go toolchain:
 ```bash
 # 安装最新版本，生成名为 ragsync 的可执行文件
 # Install the latest version, generate an executable named ragsync
-go install github.com/VillanCh/ragsync/cmd/ragsync@latest
+go install github.com/VillanCh/ragsync/cmd/ragsync@0.2.0
 ```
 
 安装完成后，可以直接在命令行中使用 `ragsync` 命令。
@@ -166,6 +164,7 @@ The configuration file contains the following fields:
 | bailian_category_type | bailian_category_type | 分类类型 | Category Type |
 | bailian_add_file_parser | bailian_add_file_parser | 文件解析器 | File Parser |
 | bailian_files_default_category_id | bailian_files_default_category_id | 默认分类 ID | Default Category ID |
+| bailian_knowledge_index_id | bailian_knowledge_index_id | 知识库索引 ID | Knowledge Base Index ID |
 
 ## 使用方法 | Usage
 
@@ -189,11 +188,17 @@ ragsync validate
 ### 上传文件 | Upload Files
 
 ```bash
-# 上传文件到知识库 | Upload a file to the knowledge base
+# 上传文件到知识库（默认自动添加到知识索引）| Upload a file to knowledge base (automatically added to knowledge index by default)
 ragsync sync --file /path/to/file.txt
+
+# 上传但不添加到知识索引 | Upload without adding to knowledge index
+ragsync sync --file /path/to/file.txt --no-index
 
 # 强制上传（如果文件已存在则覆盖）| Force upload (overwrite if file exists)
 ragsync sync --file /path/to/file.txt --force
+
+# 强制上传但保留原有索引条目（不删除旧索引）| Force upload but preserve existing index entries (don't delete old index)
+ragsync sync --file /path/to/file.txt --force --skip-index-delete
 ```
 
 ### 列出文件 | List Files
@@ -216,7 +221,7 @@ ragsync status --name "文档名称"
 ### 删除文件 | Delete Files
 
 ```bash
-# 通过文件 ID 删除文件 | Delete file by ID
+# 通过文件 ID 删除文件（同时从知识索引中删除）| Delete file by ID (also removes from knowledge index)
 ragsync delete --id "file-id"
 
 # 通过文件名删除文件 | Delete file by name
@@ -224,6 +229,32 @@ ragsync delete --name "文档名称"
 
 # 强制删除（不询问确认）| Force delete (without confirmation)
 ragsync delete --name "文档名称" --force
+
+# 删除文件但保留索引条目 | Delete file but preserve index entries
+ragsync delete --name "文档名称" --skip-index-delete
+```
+
+### 添加文件到知识索引 | Add File to Knowledge Index
+
+```bash
+# 通过文件 ID 添加已存在的文件到知识索引 | Add existing file to knowledge index by ID
+ragsync add-job --id "file-id"
+
+# 通过文件名添加已存在的文件到知识索引 | Add existing file to knowledge index by name
+ragsync add-job --name "文档名称"
+
+# 强制添加（不询问确认）| Force add without confirmation
+ragsync add-job --name "文档名称" --force
+```
+
+### 管理索引任务 | Manage Index Jobs
+
+```bash
+# 列出所有索引任务 | List all index jobs
+ragsync jobs
+
+# 查询索引任务状态 | Check index job status
+ragsync index-status --job-id "job-id"
 ```
 
 ## 命令参数详解 | Command Parameters
@@ -233,13 +264,15 @@ ragsync delete --name "文档名称" --force
 | 参数 | Parameter | 描述 | Description |
 |------|-----------|------|-------------|
 | --file | --file | 要上传的文件路径 | File path to upload |
-| --force, -f | --force, -f | 强制上传（即使文件已存在） | Force upload even if file exists |
+| --force, -f | --force, -f | 强制上传（即使文件已存在）| Force upload even if file exists |
+| --no-index, -n | --no-index, -n | 跳过将文件添加到知识索引 | Skip adding the file to knowledge index |
+| --skip-index-delete, -s | --skip-index-delete, -s | 替换文件时，跳过从知识索引中先删除文件（保留索引条目）| When replacing files, skip removing them from the knowledge index first (preserves index entries) |
 
 ### list（列出文件 | List Files）
 
 | 参数 | Parameter | 描述 | Description |
 |------|-----------|------|-------------|
-| --name | --name | 按名称筛选文件（可选） | Filter files by name (optional) |
+| --name | --name | 按名称筛选文件（可选）| Filter files by name (optional) |
 
 ### status（查询状态 | Check Status）
 
@@ -252,34 +285,72 @@ ragsync delete --name "文档名称" --force
 | 参数 | Parameter | 描述 | Description |
 |------|-----------|------|-------------|
 | --id | --id | 要删除的文件 ID | File ID to delete |
-| --name | --name | 要删除的文件名 | File name to delete |
-| --force, -f | --force, -f | 强制删除（不询问确认） | Force delete without confirmation |
+| --name | --name | 要删除的文件名 | File name to search and delete |
+| --force, -f | --force, -f | 强制删除（不询问确认）| Force delete without confirmation |
+| --skip-index-delete, -s | --skip-index-delete, -s | 跳过从知识索引中删除文件（保留索引条目）| Skip removing the file from knowledge index before deletion (preserves index entries) |
 
-### create-config（创建配置 | Create Configuration）
+### add-job（添加文件到知识索引 | Add File to Knowledge Index）
 
 | 参数 | Parameter | 描述 | Description |
 |------|-----------|------|-------------|
-| --output, -o | --output, -o | 配置文件输出路径 | Output path for configuration file |
+| --id | --id | 要添加到索引的文件 ID | File ID to add to index |
+| --name | --name | 要添加到索引的文件名 | File name to search and add to index |
+| --force, -f | --force, -f | 强制添加（不询问确认）| Force add without confirmation |
 
-## 示例 | Examples
+### jobs（列出索引任务 | List Index Jobs）
 
-### 完整工作流 | Complete Workflow
+无参数。列出所有已保存的索引任务 ID。
+
+No parameters. Lists all saved index job IDs.
+
+### index-status（查询索引任务状态 | Check Index Job Status）
+
+| 参数 | Parameter | 描述 | Description |
+|------|-----------|------|-------------|
+| --job-id | --job-id | 要查询的索引任务 ID | Index job ID to check |
+| --auto | --auto | 自动检查状态直到任务完成或失败 | Automatically check status until the job completes or fails |
+| --cleanup | --cleanup | 任务完成或失败后自动清理任务记录 | Automatically clean up job records after the job completes or fails |
+
+## 工作流示例 | Workflow Examples
+
+### 示例 1：添加新文件并索引 | Example 1: Add a new file and index it
 
 ```bash
-# 创建配置 | Create configuration
-ragsync create-config
+# 上传文件并自动添加到知识索引（默认行为）
+# Upload a file and automatically add it to the knowledge index (default behavior)
+ragsync sync --file /path/to/document.pdf
 
-# 上传文件 | Upload file
-ragsync sync --file ~/Documents/knowledge.pdf
+# 查询索引任务状态（使用返回的 job-id）
+# Check the index job status (using the returned job-id)
+ragsync index-status --job-id "job-id-returned-from-sync" --auto
+```
 
-# 查看上传的文件 | View uploaded files
-ragsync list
+### 示例 2：分步骤上传和索引 | Example 2: Upload and index in separate steps
 
-# 检查文件处理状态 | Check file processing status
-ragsync status --name "knowledge.pdf"
+```bash
+# 上传文件但不添加到知识索引
+# Upload a file without adding it to the knowledge index
+ragsync sync --file /path/to/document.pdf --no-index
 
-# 删除文件 | Delete file
-ragsync delete --name "knowledge.pdf"
+# 列出文件以获取文件 ID
+# List files to get the file ID
+ragsync list --name "document.pdf"
+
+# 将文件添加到知识索引
+# Add the file to the knowledge index
+ragsync add-job --id "file-id-from-list"
+```
+
+### 示例 3：更新现有文件并保留索引 | Example 3: Update an existing file and preserve index
+
+```bash
+# 上传新版本的文件，保留旧的索引条目
+# Upload a new version of the file, preserving old index entries
+ragsync sync --file /path/to/updated-document.pdf --force --skip-index-delete
+
+# 将新文件添加到知识索引（现在会有两个索引条目指向不同版本）
+# Add the new file to the knowledge index (now there will be two index entries pointing to different versions)
+ragsync add-job --name "updated-document.pdf"
 ```
 
 ## 注意事项 | Notes
