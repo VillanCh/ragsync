@@ -128,7 +128,7 @@ git clone https://github.com/VillanCh/ragsync.git
 cd ragsync
 
 # 编译项目 | Build the project
-go build -o ragsync cmd/ragsync.go
+go build -o ragsync ./ragsync.go
 
 # 将编译后的文件移动到可执行路径（可选）| Move the compiled file to an executable path (optional)
 sudo mv ragsync /usr/local/bin/
