@@ -47,12 +47,22 @@ jobs:
           zip -r ragsync-darwin-arm64.zip ragsync-darwin-arm64
           zip -r ragsync-windows-amd64.zip ragsync-windows-amd64.exe
           cd ..
+      
+      - name: download yak binary
+        run: wget -q -O './yak' https://aliyun-oss.yaklang.com/yak/ci/yak_linux_amd64 && chmod +x ./yak
+      
+      - name: upload ragsync binary to yak-oss
+        run: |
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-linux-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_linux_amd64'
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-darwin-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_darwin_amd64'
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-darwin-arm64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_darwin_arm64'
+          ./yak upload-oss -b yaklang --ak ${{ secrets.OSS_ACCESS_KEY }} --sk ${{ secrets.OSS_ACCESS_SECRET }} -t 5 -f 'ragsync-windows-amd64:/ragsync/${{ steps.get_version.outputs.VERSION }}/ragsync_windows_amd64.exe'
 
       - name: 创建 Release
         id: create_release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ steps.get_version.outputs.VERSION }}
@@ -62,7 +72,7 @@ jobs:
       - name: 上传 Linux 二进制文件
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./build/ragsync-linux-amd64.zip
@@ -72,7 +82,7 @@ jobs:
       - name: 上传 macOS (Intel) 二进制文件
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./build/ragsync-darwin-amd64.zip
@@ -82,7 +92,7 @@ jobs:
       - name: 上传 macOS (Apple Silicon) 二进制文件
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./build/ragsync-darwin-arm64.zip
@@ -92,7 +102,7 @@ jobs:
       - name: 上传 Windows 二进制文件
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./build/ragsync-windows-amd64.zip
