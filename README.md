@@ -54,6 +54,15 @@
 3. Grant Bailian and OSS related permissions to this user
 4. Configure the generated AccessKey and SecretKey in ragsync
 
+## 最新更新 | Latest Updates
+
+### 版本功能增强 | Version Enhancements
+
+- **增强的日志系统**：添加了更详细的日志输出，方便快速定位问题
+- **索引记录查询**：增加了查询文档是否已在索引中的功能 
+- **优化的文件上传**：优化了文件上传流程，防止重复添加文档到索引
+- **时间戳比较**：添加了本地文件与远程文件时间戳比较功能，避免意外覆盖较新的文件
+
 ## 项目简介 | Project Introduction
 
 RAG SYNC 是一个用于管理阿里云百炼知识库的命令行工具，支持上传、删除、查询文件和管理知识索引等操作。
@@ -477,3 +486,100 @@ MIT
 如有任何问题或建议，请提交 Issue 或 Pull Request。
 
 For any questions or suggestions, please submit an Issue or Pull Request.
+
+## 排查问题 | Troubleshooting
+
+### 增强的日志输出 | Enhanced Logging
+
+最新版本的 ragsync 增加了详细的日志输出，帮助快速定位问题：
+
+The latest version of ragsync has added detailed log output to help quickly locate issues:
+
+1. **详细的命令参数日志** | **Detailed command parameter logs**
+   - 每个命令执行时会记录所有使用的参数
+   - Each command execution records all parameters used
+
+2. **文件处理日志** | **File processing logs**
+   - 每个文件处理的详细步骤都有明确的日志
+   - 包含文件大小、修改时间等详细信息
+   - Detailed steps for each file processing have clear logs
+   - Including file size, modification time, and other detailed information
+
+3. **错误定位日志** | **Error locating logs**
+   - 文件名与操作一起记录，方便在批量处理时定位问题
+   - File names are recorded along with operations, making it easy to locate problems during batch processing
+
+### 常见错误 | Common Errors
+
+1. **认证失败** | **Authentication Failed**
+   ```
+   Failed to create Bailian client: Authentication failed
+   ```
+   - 检查 AccessKey 和 SecretKey 配置
+   - 确认用户有权限访问指定的工作空间
+   - Check the AccessKey and SecretKey configuration
+   - Confirm the user has permission to access the specified workspace
+
+2. **找不到工作空间** | **Workspace Not Found**
+   ```
+   Failed to create Bailian client: Workspace not found
+   ```
+   - 确认工作空间 ID 正确
+   - 检查用户是否有该工作空间的权限
+   - Confirm that the workspace ID is correct
+   - Check if the user has permissions for the workspace
+
+3. **索引 ID 未配置** | **Index ID Not Configured**
+   ```
+   Cannot add to knowledge index: BailianKnowledgeIndexId is not configured
+   ```
+   - 在配置文件中设置 `bailian_knowledge_index_id` 字段
+   - Set the `bailian_knowledge_index_id` field in the configuration file
+
+4. **文件已在索引中** | **File Already in Index**
+   ```
+   Document is already being indexed or has been indexed. Skipping index addition.
+   ```
+   - 文件已经存在于索引中，不会重复添加
+   - The file already exists in the index and will not be added again
+
+### 检查文件索引状态 | Check File Indexing Status
+
+通过查看详细日志，可以了解文件在索引中的状态：
+
+By looking at the detailed logs, you can understand the status of files in the index:
+
+```
+[File: document.pdf] Found exact match for document: document
+[File: document.pdf] Document 'document' is already being indexed or has been indexed
+```
+
+## 高级特性 | Advanced Features
+
+### 文件时间戳比较 | File Timestamp Comparison
+
+ragsync 会自动比较本地文件的修改时间与远程文件的创建时间：
+
+ragsync automatically compares the modification time of local files with the creation time of remote files:
+
+- 如果本地文件较新，默认会上传文件
+- 如果远程文件较新，默认会跳过上传
+- 使用 `--force --override-newest-data` 可以强制覆盖较新的远程文件
+
+- If the local file is newer, it will upload the file by default
+- If the remote file is newer, it will skip the upload by default
+- Use `--force --override-newest-data` to force overwrite newer remote files
+
+### 索引检查与去重 | Index Checking and Deduplication
+
+在添加文件到索引前，ragsync 会检查文件是否已经在索引中：
+
+Before adding a file to the index, ragsync checks if the file is already in the index:
+
+- 如果文件已在索引中，将自动跳过索引添加步骤
+- 避免文件重复索引，节省资源和时间
+- 可以查看详细日志了解文件的索引状态
+
+- If the file is already in the index, it will automatically skip the index addition step
+- Avoids duplicate indexing of files, saving resources and time
+- You can view detailed logs to understand the indexing status of files

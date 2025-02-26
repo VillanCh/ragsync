@@ -59,22 +59,37 @@ func SyncCommand() cli.Command {
 
 // executeSync 上传文件的执行逻辑
 func executeSync(c *cli.Context) error {
+	log.Infof("Starting sync operation...")
+
 	// 从配置文件加载配置
 	config, err := LoadConfig(c)
 	if err != nil {
+		log.Errorf("Failed to load configuration: %v", err)
 		return err
 	}
+	log.Infof("Configuration loaded successfully from: %s", c.GlobalString("config"))
 
 	filePath := c.String("file")
 	dirPath := c.String("dir")
 
+	// 打印命令参数
+	log.Infof("Command parameters: file=%s, dir=%s, force=%v, override-newest-data=%v, no-index=%v, skip-index-delete=%v",
+		filePath,
+		dirPath,
+		c.Bool("force"),
+		c.Bool("override-newest-data"),
+		c.Bool("no-index"),
+		c.Bool("skip-index-delete"))
+
 	// 文件和目录参数必须至少提供一个
 	if filePath == "" && dirPath == "" {
+		log.Errorf("No file or directory path specified")
 		return utils.Errorf("Please specify either file path (--file) or directory path (--dir) to upload")
 	}
 
 	// 文件和目录参数不能同时提供
 	if filePath != "" && dirPath != "" {
+		log.Errorf("Both file and directory paths specified, only one is allowed")
 		return utils.Errorf("Cannot specify both --file and --dir at the same time")
 	}
 
@@ -91,15 +106,21 @@ func executeSync(c *cli.Context) error {
 	// 默认会添加到索引，除非指定了--no-index
 	addToIndex := !skipIndex
 
+	log.Infof("Add to index: %v", addToIndex)
+
 	// 如果需要添加到索引，但索引ID未配置，则返回错误
 	if addToIndex && config.BailianKnowledgeIndexId == "" {
+		log.Errorf("BailianKnowledgeIndexId is not configured in config file")
 		return utils.Errorf("Cannot add to knowledge index: BailianKnowledgeIndexId is not configured in your config file")
 	}
 
+	log.Infof("Creating Bailian client with workspace ID: %s", config.BailianWorkspaceId)
 	client, err := aliyun.NewBailianClientFromConfig(config)
 	if err != nil {
+		log.Errorf("Failed to create Bailian client: %v", err)
 		return err
 	}
+	log.Infof("Bailian client created successfully")
 
 	// 如果指定了目录，则遍历目录并上传符合条件的文件
 	if dirPath != "" {
@@ -109,22 +130,28 @@ func executeSync(c *cli.Context) error {
 			extensions[i] = strings.TrimSpace(extensions[i])
 		}
 
+		log.Infof("Processing directory upload with extensions: %v", extensions)
 		return processDirUpload(dirPath, extensions, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 	}
 
 	// 处理单个文件上传
+	log.Infof("Processing single file upload: %s", filePath)
 	return processFileUpload(filePath, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 }
 
 // processDirUpload 处理目录递归上传
 func processDirUpload(dirPath string, extensions []string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool, overrideNewestData bool) error {
+	log.Infof("[Dir: %s] Starting directory processing", dirPath)
+
 	// 检查目录是否存在
 	dirInfo, err := os.Stat(dirPath)
 	if err != nil {
+		log.Errorf("[Dir: %s] Failed to access directory: %v", dirPath, err)
 		return utils.Errorf("Failed to access directory: %v", err)
 	}
 
 	if !dirInfo.IsDir() {
+		log.Errorf("[Dir: %s] The specified path is not a directory", dirPath)
 		return utils.Errorf("The specified path is not a directory: %s", dirPath)
 	}
 
@@ -133,50 +160,60 @@ func processDirUpload(dirPath string, extensions []string, client *aliyun.Bailia
 	failedCount := 0
 	skippedCount := 0
 
-	log.Infof("Scanning directory: %s", dirPath)
-	log.Infof("File extensions to process: %s", strings.Join(extensions, ", "))
+	log.Infof("[Dir: %s] Scanning directory", dirPath)
+	log.Infof("[Dir: %s] File extensions to process: %s", dirPath, strings.Join(extensions, ", "))
 
 	// 遍历目录中的所有文件
 	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Warnf("Error accessing path %s: %v", path, err)
+			log.Warnf("[Dir: %s] Error accessing path %s: %v", dirPath, path, err)
 			return nil
 		}
 
 		// 跳过目录
 		if info.IsDir() {
+			log.Debugf("[Dir: %s] Skipping directory: %s", dirPath, path)
 			return nil
 		}
 
 		// 检查文件扩展名是否符合要求
 		ext := strings.ToLower(filepath.Ext(path))
 		if !isExtensionAllowed(ext, extensions) {
+			log.Infof("[Dir: %s] Skipping file with unsupported extension: %s (ext: %s)", dirPath, path, ext)
 			skippedCount++
 			return nil
 		}
 
-		log.Infof("Processing file: %s", path)
+		log.Infof("[Dir: %s] Processing file (%d processed so far): %s", dirPath, successCount+failedCount, path)
 
 		// 使用与单文件上传相同的逻辑处理
 		err = processFileUpload(path, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 		if err != nil {
-			log.Errorf("Failed to upload file %s: %v", path, err)
+			log.Errorf("[Dir: %s] Failed to upload file %s: %v", dirPath, path, err)
 			failedCount++
 		} else {
+			log.Infof("[Dir: %s] Successfully processed file: %s", dirPath, path)
 			successCount++
+		}
+
+		// 显示进度报告
+		if (successCount+failedCount)%5 == 0 {
+			log.Infof("[Dir: %s] Progress: %d files processed (%d success, %d failed, %d skipped)",
+				dirPath, successCount+failedCount+skippedCount, successCount, failedCount, skippedCount)
 		}
 
 		return nil
 	})
 
 	if err != nil {
+		log.Errorf("[Dir: %s] Failed to walk directory: %v", dirPath, err)
 		return utils.Errorf("Failed to walk directory: %v", err)
 	}
 
 	// 打印处理结果摘要
-	log.Infof("Directory processing completed: %s", dirPath)
-	log.Infof("Results: %d files processed, %d uploaded successfully, %d failed, %d skipped (wrong extension)",
-		successCount+failedCount+skippedCount, successCount, failedCount, skippedCount)
+	log.Infof("[Dir: %s] Directory processing completed", dirPath)
+	log.Infof("[Dir: %s] Results: %d files processed, %d uploaded successfully, %d failed, %d skipped (wrong extension)",
+		dirPath, successCount+failedCount+skippedCount, successCount, failedCount, skippedCount)
 
 	return nil
 }
@@ -193,19 +230,28 @@ func isExtensionAllowed(ext string, allowedExtensions []string) bool {
 
 // processFileUpload 处理单个文件上传
 func processFileUpload(filePath string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool, overrideNewestData bool) error {
+	log.Infof("[File: %s] Starting file upload process", filePath)
+
 	// 获取本地文件信息
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
+		log.Errorf("[File: %s] Failed to get file information: %v", filePath, err)
 		return utils.Errorf("Failed to get file information: %v", err)
 	}
+
+	log.Infof("[File: %s] File size: %d bytes, Last modified: %s",
+		filePath, fileInfo.Size(), fileInfo.ModTime().Format(time.RFC3339))
 
 	// 获取文件修改时间
 	fileModTime := fileInfo.ModTime()
 
+	log.Infof("[File: %s] Reading file content", filePath)
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
+		log.Errorf("[File: %s] Failed to read file content: %v", filePath, err)
 		return err
 	}
+	log.Infof("[File: %s] File content read successfully, size: %d bytes", filePath, len(fileContent))
 
 	fileName := filePath
 
@@ -215,14 +261,16 @@ func processFileUpload(filePath string, client *aliyun.BailianClient, config *sp
 	var fileId string
 
 	// 检查文件是否已存在（无论是否为强制模式）
-	log.Infof("Checking if file '%s' already exists...", fileName)
+	log.Infof("[File: %s] Checking if file already exists on server", fileName)
 
 	// 列出所有匹配该文件名的文件
 	existingFiles, err := client.ListAllFiles(fileName)
 	if err != nil {
-		log.Warnf("Failed to check existing files: %v", err)
-		log.Info("Proceeding with upload anyway...")
+		log.Warnf("[File: %s] Failed to check existing files: %v", fileName, err)
+		log.Info("[File: %s] Proceeding with upload anyway...", fileName)
 	} else if len(existingFiles) > 0 {
+		log.Infof("[File: %s] Found %d existing files with similar name", fileName, len(existingFiles))
+
 		// 显示找到的文件
 		fmt.Println("Found existing files with similar name:")
 		fmt.Printf("\n%-40s %-50s %-15s\n", "File ID", "File Name", "Status")
@@ -357,56 +405,74 @@ func processFileUpload(filePath string, client *aliyun.BailianClient, config *sp
 
 	// 如果需要上传新文件
 	if needUpload {
-		log.Infof("Uploading file: %s", filePath)
+		log.Infof("[File: %s] Initiating file upload process", filePath)
+		log.Infof("[File: %s] Applying for file upload lease", filePath)
 		lis, err := client.ApplyFileUploadLease(filePath, fileContent)
 		if err != nil {
+			log.Errorf("[File: %s] Failed to apply for upload lease: %v", filePath, err)
 			return err
 		}
+		log.Infof("[File: %s] Upload lease acquired successfully", filePath)
+
 		headers := utils.InterfaceToGeneralMap(lis.Headers)
 		bailianExtra, ok := headers["X-bailian-extra"]
 		if !ok {
+			log.Errorf("[File: %s] X-bailian-extra header not found in lease response", filePath)
 			return utils.Errorf("X-bailian-extra does not exist")
 		}
 		contentType, ok := headers["Content-Type"]
 		if !ok {
+			log.Errorf("[File: %s] Content-Type header not found in lease response", filePath)
 			return utils.Errorf("Content-Type does not exist")
 		}
+
+		log.Infof("[File: %s] Uploading file to URL: %s", filePath, lis.UploadURL)
+		log.Infof("[File: %s] Upload method: %s, Content-Type: %s", filePath, lis.Method, contentType)
 
 		// Upload file
 		err = aliyun.UploadFile(lis.Method, lis.UploadURL, filePath, fmt.Sprint(contentType), fileContent, fmt.Sprintf("%s", bailianExtra))
 		if err != nil {
+			log.Errorf("[File: %s] File upload failed: %v", filePath, err)
 			return err
 		}
+		log.Infof("[File: %s] File content uploaded successfully", filePath)
 
-		log.Info("Adding file to Bailian RAG")
+		log.Infof("[File: %s] Adding file to Bailian RAG with lease ID: %s", filePath, lis.LeaseId)
 		fileId, err = client.AddFile(lis.LeaseId)
 		if err != nil {
+			log.Errorf("[File: %s] Failed to add file to Bailian RAG: %v", filePath, err)
 			return err
 		}
 
-		log.Infof("File added successfully with ID: %s", fileId)
+		log.Infof("[File: %s] File added successfully with ID: %s", filePath, fileId)
+	} else {
+		log.Infof("[File: %s] Using existing file, skipping upload", filePath)
 	}
 
 	// 无论是新上传的文件还是使用已有文件，如果需要添加到索引，就执行索引步骤
 	if addToIndex && fileId != "" {
-		log.Infof("Adding file to knowledge index: %s", config.BailianKnowledgeIndexId)
+		log.Infof("[File: %s] Adding file (ID: %s) to knowledge index: %s",
+			filePath, fileId, config.BailianKnowledgeIndexId)
 
 		jobId, err := client.AppendDocumentToIndex(fileId)
 		if err != nil {
-			log.Errorf("Failed to add file to knowledge index: %v", err)
+			log.Errorf("[File: %s] Failed to add file to knowledge index: %v", filePath, err)
 			return err
 		}
 
 		if jobId != "" {
-			log.Infof("File added to knowledge index successfully. Job ID: %s", jobId)
-			log.Info("You can check the job status with: ragsync job --job-id " + jobId)
+			log.Infof("[File: %s] File added to knowledge index successfully. Job ID: %s", filePath, jobId)
+			log.Infof("[File: %s] You can check the job status with: ragsync job --job-id %s", filePath, jobId)
 		} else {
-			log.Warnf("File was processed, but no job ID was returned. The file may still be added to the index.")
+			log.Warnf("[File: %s] File was processed, but no job ID was returned. The file may still be added to the index.", filePath)
 		}
 	} else if !addToIndex {
-		log.Info("Skipping knowledge index step (--no-index was specified)")
+		log.Infof("[File: %s] Skipping knowledge index step (--no-index was specified)", filePath)
+	} else {
+		log.Warnf("[File: %s] Cannot add to index: file ID is empty", filePath)
 	}
 
+	log.Infof("[File: %s] File processing completed successfully", filePath)
 	return nil
 }
 
