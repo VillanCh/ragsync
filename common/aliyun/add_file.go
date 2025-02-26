@@ -12,17 +12,17 @@ import (
 )
 
 // AddFile 将已上传的文件添加到百炼服务
-func (client *BailianClient) AddFile(leaseId string) error {
+func (client *BailianClient) AddFile(leaseId string) (string, error) {
 	if client.config == nil {
-		return utils.Error("Client configuration is not set")
+		return "", utils.Error("Client configuration is not set")
 	}
 
 	if client.config.BailianWorkspaceId == "" {
-		return utils.Error("Workspace ID is not set")
+		return "", utils.Error("Workspace ID is not set")
 	}
 
 	if leaseId == "" {
-		return utils.Error("Lease ID cannot be empty")
+		return "", utils.Error("Lease ID cannot be empty")
 	}
 
 	// 创建添加文件请求
@@ -62,18 +62,19 @@ func (client *BailianClient) AddFile(leaseId string) error {
 				}
 			}
 		}
-		return utils.Errorf("Failed to add file: %v", err)
+		return "", utils.Errorf("Failed to add file: %v", err)
 	}
 
 	// 解析响应
 	if response == nil || response.Body == nil {
-		return utils.Errorf("Add file response is empty")
+		return "", utils.Errorf("Add file response is empty")
 	}
 
 	if tea.StringValue(response.Body.Success) != "true" {
-		return utils.Errorf("Failed to add file: %v", response.Body.Message)
+		return "", utils.Errorf("Failed to add file: %v", response.Body.Message)
 	}
 
-	log.Infof("File added successfully, file ID: %s", tea.StringValue(response.Body.Data.FileId))
-	return nil
+	fileId := tea.StringValue(response.Body.Data.FileId)
+	log.Infof("File added successfully, file ID: %s", fileId)
+	return fileId, nil
 }

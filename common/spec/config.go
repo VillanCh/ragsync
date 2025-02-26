@@ -18,6 +18,7 @@ type Config struct {
 	BailianWorkspaceId            string `yaml:"bailian_workspace_id"`              // fetch from bailian.console.aliyun.com
 	BailianAddFileParser          string `yaml:"bailian_add_file_parser"`           // DASHSCOPE_DOCMIND
 	BailianFilesDefaultCategoryId string `yaml:"bailian_files_default_category_id"` // default
+	BailianKnowledgeIndexId       string `yaml:"bailian_knowledge_index_id"`        // knowledge index id for RAG
 }
 
 // 默认配置值
@@ -79,10 +80,15 @@ func LoadConfig(configPath string) (*Config, error) {
 	// 检查必要的配置项
 	if config.AliyunAccessKey == "" || config.AliyunSecretKey == "" {
 		log.Warnf("Aliyun access key not set in configuration file, will try to get from environment variables")
+		return nil, utils.Errorf("Aliyun access key not set in configuration file, will try to get from environment variables")
 	}
 
 	if config.BailianWorkspaceId == "" {
 		log.Warnf("Bailian workspace ID not set, please specify in configuration file or through environment variables")
+	}
+
+	if config.BailianKnowledgeIndexId == "" {
+		log.Warnf("Bailian knowledge index ID not set, please specify in configuration file or through environment variables")
 	}
 
 	// 验证配置

@@ -11,8 +11,14 @@ import (
 	"github.com/yaklang/yaklang/common/utils"
 )
 
-// DeleteFile 删除指定ID的文件
+// DeleteFile 删除指定ID的文件（先尝试删除索引，再删除文件）
 func (client *BailianClient) DeleteFile(fileId string) error {
+	// 默认执行索引删除
+	return client.DeleteFileEx(fileId, false)
+}
+
+// DeleteFileEx 删除指定ID的文件，可选是否跳过索引删除
+func (client *BailianClient) DeleteFileEx(fileId string, skipDeleteIndex bool) error {
 	if client.config == nil {
 		return utils.Error("Client configuration is not set")
 	}
@@ -23,6 +29,24 @@ func (client *BailianClient) DeleteFile(fileId string) error {
 
 	if fileId == "" {
 		return utils.Error("File ID cannot be empty")
+	}
+
+	// 如果配置了知识库索引ID且没有选择跳过索引删除，先尝试从索引中删除文档
+	if client.config.BailianKnowledgeIndexId != "" && !skipDeleteIndex {
+		log.Infof("Attempting to delete document from index before deleting the file...")
+
+		// 尝试从索引中删除文档
+		err := client.DeleteIndexDocument(fileId)
+		if err != nil {
+			log.Errorf("Failed to delete document from index: %v", err)
+			return utils.Errorf("Cannot delete file because index document deletion failed: %v. Please resolve index issues first.", err)
+		}
+
+		log.Infof("Successfully deleted document from index, proceeding to delete the file...")
+	} else if skipDeleteIndex {
+		log.Infof("Skipping index document deletion step as requested")
+	} else {
+		log.Infof("Knowledge Index ID not configured, skipping index document deletion step")
 	}
 
 	runtime := &util.RuntimeOptions{}

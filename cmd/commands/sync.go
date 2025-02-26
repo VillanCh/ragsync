@@ -29,6 +29,14 @@ func SyncCommand() cli.Command {
 				Name:  "force,f",
 				Usage: "Force upload even if file exists",
 			},
+			cli.BoolFlag{
+				Name:  "no-index,n",
+				Usage: "Skip adding the file to knowledge index",
+			},
+			cli.BoolFlag{
+				Name:  "skip-index-delete,s",
+				Usage: "Skip deleting from index when replacing existing files",
+			},
 		},
 		Action: executeSync,
 	}
@@ -48,6 +56,16 @@ func executeSync(c *cli.Context) error {
 	}
 
 	forceUpload := c.Bool("force")
+	skipIndex := c.Bool("no-index")
+	skipIndexDelete := c.Bool("skip-index-delete")
+
+	// 默认会添加到索引，除非指定了--no-index
+	addToIndex := !skipIndex
+
+	// 如果需要添加到索引，但索引ID未配置，则返回错误
+	if addToIndex && config.BailianKnowledgeIndexId == "" {
+		return utils.Errorf("Cannot add to knowledge index: BailianKnowledgeIndexId is not configured in your config file")
+	}
 
 	// 获取本地文件信息
 	fileInfo, err := os.Stat(filePath)
@@ -94,10 +112,16 @@ func executeSync(c *cli.Context) error {
 
 		// 如果是强制模式，直接删除文件
 		if forceUpload {
-			log.Info("Force mode enabled. Deleting existing files...")
+			if skipIndexDelete {
+				log.Info("Force mode enabled. Deleting existing files (skipping index deletion)...")
+			} else {
+				log.Info("Force mode enabled. Deleting existing files and their index entries...")
+			}
+
 			for _, file := range existingFiles {
 				log.Infof("Deleting file: %s (ID: %s)", file.FileName, file.FileId)
-				err := client.DeleteFile(file.FileId)
+				// 使用DeleteFileEx方法，可以控制是否跳过索引删除
+				err := client.DeleteFileEx(file.FileId, skipIndexDelete)
 				if err != nil {
 					log.Warnf("Failed to delete file %s: %v", file.FileId, err)
 				} else {
@@ -106,7 +130,14 @@ func executeSync(c *cli.Context) error {
 			}
 		} else {
 			// 在非强制模式下询问用户是否删除文件
-			if !askForConfirmation("File with the same name already exists. Do you want to delete it before uploading?") {
+			deleteMsg := "File with the same name already exists."
+			if skipIndexDelete {
+				deleteMsg += " Do you want to delete it before uploading? (Index entries will be preserved)"
+			} else {
+				deleteMsg += " Do you want to delete it and its index entries before uploading?"
+			}
+
+			if !askForConfirmation(deleteMsg) {
 				log.Info("Upload cancelled")
 				return nil
 			}
@@ -114,7 +145,8 @@ func executeSync(c *cli.Context) error {
 			// 用户确认删除
 			for _, file := range existingFiles {
 				log.Infof("Deleting file: %s (ID: %s)", file.FileName, file.FileId)
-				err := client.DeleteFile(file.FileId)
+				// 使用DeleteFileEx方法，可以控制是否跳过索引删除
+				err := client.DeleteFileEx(file.FileId, skipIndexDelete)
 				if err != nil {
 					log.Warnf("Failed to delete file %s: %v", file.FileId, err)
 					return err
@@ -146,12 +178,33 @@ func executeSync(c *cli.Context) error {
 	}
 
 	log.Info("Adding file to Bailian RAG")
-	err = client.AddFile(lis.LeaseId)
+	fileId, err := client.AddFile(lis.LeaseId)
 	if err != nil {
 		return err
 	}
 
-	log.Info("File added successfully")
+	log.Infof("File added successfully with ID: %s", fileId)
+
+	// 如果用户没有选择跳过索引，则将文件添加到知识库索引
+	if addToIndex && fileId != "" {
+		log.Infof("Adding file to knowledge index: %s", config.BailianKnowledgeIndexId)
+
+		jobId, err := client.AppendDocumentToIndex(fileId)
+		if err != nil {
+			log.Errorf("Failed to add file to knowledge index: %v", err)
+			return err
+		}
+
+		if jobId != "" {
+			log.Infof("File added to knowledge index successfully. Job ID: %s", jobId)
+			log.Info("You can check the job status with: ragsync job --job-id " + jobId)
+		} else {
+			log.Warnf("File was processed, but no job ID was returned. The file may still be added to the index.")
+		}
+	} else if skipIndex {
+		log.Info("Skipping knowledge index step (--no-index was specified)")
+	}
+
 	return nil
 }
 

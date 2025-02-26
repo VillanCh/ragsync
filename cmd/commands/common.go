@@ -38,5 +38,7 @@ func GetCommands() []cli.Command {
 		StatusCommand(),
 		DeleteCommand(),
 		ValidateConfigCommand(),
+		IndexStatusCommand(),
+		IndexJobsListCommand(),
 	}
 }

@@ -31,6 +31,10 @@ func DeleteCommand() cli.Command {
 				Name:  "force, f",
 				Usage: "Force delete without confirmation",
 			},
+			cli.BoolFlag{
+				Name:  "skip-index-delete, s",
+				Usage: "Skip the index deletion step (file will still be deleted)",
+			},
 		},
 		Action: executeDelete,
 	}
@@ -47,6 +51,7 @@ func executeDelete(c *cli.Context) error {
 	fileId := c.String("id")
 	fileName := c.String("name")
 	forceDelete := c.Bool("force")
+	skipIndexDelete := c.Bool("skip-index-delete")
 
 	if fileId == "" && fileName == "" {
 		return utils.Errorf("Please specify either file ID (--id) or file name (--name) to delete")
@@ -116,9 +121,19 @@ func executeDelete(c *cli.Context) error {
 	}
 
 	// 执行删除操作
-	log.Infof("Deleting file: %s (ID: %s)", fileName, fileId)
-	err = client.DeleteFile(fileId)
+	if skipIndexDelete {
+		log.Infof("Deleting file (skipping index deletion): %s (ID: %s)", fileName, fileId)
+	} else {
+		log.Infof("Deleting file and its index entry: %s (ID: %s)", fileName, fileId)
+	}
+
+	// 使用新的DeleteFileEx方法，传入skipIndexDelete参数
+	err = client.DeleteFileEx(fileId, skipIndexDelete)
 	if err != nil {
+		// 如果跳过了索引删除，但文件删除失败，可能是索引问题
+		if skipIndexDelete {
+			log.Warnf("File deletion failed. Consider trying with index deletion enabled.")
+		}
 		return err
 	}
 
