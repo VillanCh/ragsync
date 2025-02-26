@@ -91,6 +91,13 @@ func main() {
 					return err
 				}
 
+				log.Info("添加文件到百炼 RAG")
+				err = client.AddFile(lis.LeaseId)
+				if err != nil {
+					return err
+				}
+
+				log.Info("文件添加成功")
 				return nil
 			},
 		},
