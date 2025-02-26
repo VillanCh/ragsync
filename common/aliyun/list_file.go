@@ -116,17 +116,17 @@ func (client *BailianClient) ListFile(maxResults int32, nextToken string, fileNa
 		Raw:       response.Body,
 	}
 
-	// 处理文件列表
-	if response.Body.Data.FileList != nil {
-		for _, file := range response.Body.Data.FileList {
-			fileInfo := &FileInfo{
-				FileId:     tea.StringValue(file.FileId),
-				FileName:   tea.StringValue(file.FileName),
-				Status:     tea.StringValue(file.Status),
-				CategoryId: tea.StringValue(file.CategoryId),
-			}
-			result.Files = append(result.Files, fileInfo)
+	// 遍历文件列表
+	for _, fileItem := range response.Body.Data.FileList {
+		fileInfo := &FileInfo{
+			Raw:        fileItem,
+			FileId:     tea.StringValue(fileItem.FileId),
+			FileName:   tea.StringValue(fileItem.FileName),
+			Status:     tea.StringValue(fileItem.Status),
+			CategoryId: tea.StringValue(fileItem.CategoryId),
+			CreateTime: tea.StringValue(fileItem.CreateTime),
 		}
+		result.Files = append(result.Files, fileInfo)
 	}
 
 	log.Infof("Retrieved %d files", len(result.Files))

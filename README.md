@@ -200,6 +200,9 @@ ragsync sync --file /path/to/file.txt --force
 # 强制上传但保留原有索引条目（不删除旧索引）| Force upload but preserve existing index entries (don't delete old index)
 ragsync sync --file /path/to/file.txt --force --skip-index-delete
 
+# 强制上传并覆盖较新的远程文件 | Force upload and override newer remote files
+ragsync sync --file /path/to/file.txt --force --override-newest-data
+
 # 批量上传目录中的所有支持文件 | Batch upload all supported files in a directory
 ragsync sync --dir /path/to/directory
 
@@ -209,6 +212,60 @@ ragsync sync --dir /path/to/directory --ext ".txt,.pdf,.docx"
 # 强制批量上传目录中的所有文件 | Force batch upload all files in a directory
 ragsync sync --dir /path/to/directory --force
 ```
+
+### 示例 4：批量上传目录中的文件 | Example 4: Batch upload files in a directory
+
+```bash
+# 使用默认扩展名批量上传目录中的文件
+# Batch upload files in a directory with default extensions
+ragsync sync --dir /path/to/documents
+
+# 上传所有PDF和DOCX文件到知识库并添加到索引
+# Upload all PDF and DOCX files to the knowledge base and add to index
+ragsync sync --dir /path/to/documents --ext ".pdf,.docx"
+
+# 强制替换所有已存在的文件，保留原有索引条目
+# Force replace all existing files, preserving original index entries
+ragsync sync --dir /path/to/documents --force --skip-index-delete
+```
+
+### 示例 5：处理版本冲突 | Example 5: Handling version conflicts
+
+```bash
+# 尝试上传文件（如果远程文件较新，则会自动跳过）
+# Try to upload file (will skip automatically if remote file is newer)
+ragsync sync --file /path/to/document.pdf
+
+# 强制上传并覆盖远程文件，即使远程文件可能较新
+# Force upload and override remote files, even if they might be newer
+ragsync sync --file /path/to/document.pdf --force --override-newest-data
+
+# 批量上传所有文件，忽略远程文件时间戳
+# Batch upload all files, ignoring remote file timestamps
+ragsync sync --dir /path/to/documents --force --override-newest-data
+```
+
+### 文件时间比较逻辑 | File Time Comparison Logic
+
+当您使用 `sync` 命令上传文件时，ragsync 会自动比较本地文件的修改时间与远程文件的创建时间：
+
+When you use the `sync` command to upload files, ragsync automatically compares the local file's modification time with the remote file's creation time:
+
+1. **自动检测冲突** - 如果远程文件比本地文件更新，上传会被自动跳过以防止覆盖更新的内容。
+   
+   **Automatic Conflict Detection** - If the remote file is newer than the local file, upload will be automatically skipped to prevent overwriting newer content.
+
+2. **选择性覆盖** - 使用 `--force` 可以覆盖已存在的文件，但默认情况下仍会检查时间戳。
+   
+   **Selective Overriding** - Use `--force` to override existing files, but timestamps will still be checked by default.
+
+3. **完全覆盖** - 当您需要忽略时间戳检查时，同时使用 `--force` 和 `--override-newest-data` 选项。
+   
+   **Complete Overriding** - When you need to ignore timestamp checks, use both `--force` and `--override-newest-data` options.
+
+4. **协作安全** - 此功能有助于防止在协作环境中意外覆盖他人的更新。
+   
+   **Collaboration Safety** - This feature helps prevent accidentally overwriting others' updates in collaborative environments.
 
 ### 列出文件 | List Files
 
@@ -276,6 +333,7 @@ ragsync index-status --job-id "job-id"
 | --dir | --dir | 要递归扫描并上传文件的目录路径 | Directory path to recursively scan and upload files |
 | --ext | --ext | 与--dir一起使用时要上传的文件扩展名（逗号分隔，如 '.txt,.pdf,.md'）| File extensions to upload when using --dir (comma separated, e.g. '.txt,.pdf,.md') |
 | --force, -f | --force, -f | 强制上传（即使文件已存在）| Force upload even if file exists |
+| --override-newest-data, -o | --override-newest-data, -o | 覆盖比本地文件更新的远程文件（需要与--force一起使用）| Override remote files even if they are newer than local files (requires --force) |
 | --no-index, -n | --no-index, -n | 跳过将文件添加到知识索引 | Skip adding the file to knowledge index |
 | --skip-index-delete, -s | --skip-index-delete, -s | 替换文件时，跳过从知识索引中先删除文件（保留索引条目）| When replacing files, skip removing them from the knowledge index first (preserves index entries) |
 
@@ -378,6 +436,22 @@ ragsync sync --dir /path/to/documents --ext ".pdf,.docx"
 # 强制替换所有已存在的文件，保留原有索引条目
 # Force replace all existing files, preserving original index entries
 ragsync sync --dir /path/to/documents --force --skip-index-delete
+```
+
+### 示例 5：处理版本冲突 | Example 5: Handling version conflicts
+
+```bash
+# 尝试上传文件（如果远程文件较新，则会自动跳过）
+# Try to upload file (will skip automatically if remote file is newer)
+ragsync sync --file /path/to/document.pdf
+
+# 强制上传并覆盖远程文件，即使远程文件可能较新
+# Force upload and override remote files, even if they might be newer
+ragsync sync --file /path/to/document.pdf --force --override-newest-data
+
+# 批量上传所有文件，忽略远程文件时间戳
+# Batch upload all files, ignoring remote file timestamps
+ragsync sync --dir /path/to/documents --force --override-newest-data
 ```
 
 ## 注意事项 | Notes

@@ -17,6 +17,7 @@ type FileInfo struct {
 	FileName   string `json:"fileName"`
 	Status     string `json:"status"`
 	CategoryId string `json:"categoryId"`
+	CreateTime string `json:"createTime"` // 文件创建时间
 	Raw        any    `json:"raw"`
 }
 
@@ -87,6 +88,7 @@ func (client *BailianClient) DescribeFile(fileId string) (*FileInfo, error) {
 		FileName:   tea.StringValue(response.Body.Data.FileName),
 		Status:     tea.StringValue(response.Body.Data.Status),
 		CategoryId: tea.StringValue(response.Body.Data.CategoryId),
+		CreateTime: tea.StringValue(response.Body.Data.CreateTime),
 	}
 
 	log.Infof("File information retrieved successfully, file ID: %s, name: %s", fileInfo.FileId, fileInfo.FileName)

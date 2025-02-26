@@ -78,6 +78,28 @@ func (client *BailianClient) AppendDocumentsToIndex(documentIds []string) (strin
 
 // AppendDocumentToIndex 将单个文档添加到知识库索引 (便捷方法)
 func (client *BailianClient) AppendDocumentToIndex(documentId string) (string, error) {
+	log.Infof("Start to appending document to knowledge index: %s, checking if it's already indexed...", documentId)
+
+	log.Infof("Getting file[%v] info...", documentId)
+	// 获取文档信息
+	fileInfo, err := client.DescribeFile(documentId)
+	if err != nil {
+		return "", utils.Errorf("Failed to get file info for document ID %s: %v", documentId, err)
+	}
+
+	log.Infof("Checking if file[%v] is already indexed...", fileInfo.FileName)
+	// 检查文档是否已经在索引中
+	isExisting, err := client.CheckAndWaitForExistingIndexJob(fileInfo.FileName)
+	if err != nil {
+		log.Warnf("Failed to check if document is already indexed: %v", err)
+		// 即使检查失败，仍然继续添加文档到索引
+	} else if isExisting {
+		log.Infof("Document '%s' (ID: %s) is already being indexed or has been indexed. Skipping index addition.",
+			fileInfo.FileName, documentId)
+		return "", nil
+	}
+
+	// 添加文档到索引
 	return client.AppendDocumentsToIndex([]string{documentId})
 }
 
