@@ -35,7 +35,7 @@ func SyncCommand() cli.Command {
 			},
 			cli.BoolFlag{
 				Name:  "skip-index-delete,s",
-				Usage: "Skip deleting from index when replacing existing files",
+				Usage: "When replacing files, skip removing them from the knowledge index first (preserves index entries)",
 			},
 		},
 		Action: executeSync,
@@ -88,6 +88,11 @@ func executeSync(c *cli.Context) error {
 
 	fileName := filePath
 
+	// 是否需要上传新文件（默认为true）
+	needUpload := true
+	// 需要添加到索引的文件ID
+	var fileId string
+
 	// 检查文件是否已存在（无论是否为强制模式）
 	log.Infof("Checking if file '%s' already exists...", fileName)
 
@@ -129,63 +134,74 @@ func executeSync(c *cli.Context) error {
 				}
 			}
 		} else {
-			// 在非强制模式下询问用户是否删除文件
+			// 在非强制模式下询问用户是否删除文件并上传新版本
 			deleteMsg := "File with the same name already exists."
 			if skipIndexDelete {
-				deleteMsg += " Do you want to delete it before uploading? (Index entries will be preserved)"
+				deleteMsg += " Do you want to delete it and upload a new version? (Index entries will be preserved)"
 			} else {
-				deleteMsg += " Do you want to delete it and its index entries before uploading?"
+				deleteMsg += " Do you want to delete it and upload a new version? (This will also update index entries)"
 			}
 
 			if !askForConfirmation(deleteMsg) {
-				log.Info("Upload cancelled")
-				return nil
-			}
+				log.Info("Upload cancelled. Using existing file.")
+				needUpload = false
 
-			// 用户确认删除
-			for _, file := range existingFiles {
-				log.Infof("Deleting file: %s (ID: %s)", file.FileName, file.FileId)
-				// 使用DeleteFileEx方法，可以控制是否跳过索引删除
-				err := client.DeleteFileEx(file.FileId, skipIndexDelete)
-				if err != nil {
-					log.Warnf("Failed to delete file %s: %v", file.FileId, err)
-					return err
+				// 使用最新的文件ID（如果有多个同名文件，使用第一个）
+				if len(existingFiles) > 0 {
+					fileId = existingFiles[0].FileId
+					log.Infof("Using existing file ID: %s", fileId)
+				} else {
+					return utils.Errorf("No valid file ID found among existing files")
 				}
-				log.Infof("File deleted successfully: %s", file.FileId)
+			} else {
+				// 用户确认删除并上传新版本
+				for _, file := range existingFiles {
+					log.Infof("Deleting file: %s (ID: %s)", file.FileName, file.FileId)
+					// 使用DeleteFileEx方法，可以控制是否跳过索引删除
+					err := client.DeleteFileEx(file.FileId, skipIndexDelete)
+					if err != nil {
+						log.Warnf("Failed to delete file %s: %v", file.FileId, err)
+						return err
+					}
+					log.Infof("File deleted successfully: %s", file.FileId)
+				}
 			}
 		}
 	}
 
-	log.Infof("Uploading file: %s", filePath)
-	lis, err := client.ApplyFileUploadLease(filePath, fileContent)
-	if err != nil {
-		return err
-	}
-	headers := utils.InterfaceToGeneralMap(lis.Headers)
-	bailianExtra, ok := headers["X-bailian-extra"]
-	if !ok {
-		return utils.Errorf("X-bailian-extra does not exist")
-	}
-	contentType, ok := headers["Content-Type"]
-	if !ok {
-		return utils.Errorf("Content-Type does not exist")
+	// 如果需要上传新文件
+	if needUpload {
+		log.Infof("Uploading file: %s", filePath)
+		lis, err := client.ApplyFileUploadLease(filePath, fileContent)
+		if err != nil {
+			return err
+		}
+		headers := utils.InterfaceToGeneralMap(lis.Headers)
+		bailianExtra, ok := headers["X-bailian-extra"]
+		if !ok {
+			return utils.Errorf("X-bailian-extra does not exist")
+		}
+		contentType, ok := headers["Content-Type"]
+		if !ok {
+			return utils.Errorf("Content-Type does not exist")
+		}
+
+		// Upload file
+		err = aliyun.UploadFile(lis.Method, lis.UploadURL, filePath, fmt.Sprint(contentType), fileContent, fmt.Sprintf("%s", bailianExtra))
+		if err != nil {
+			return err
+		}
+
+		log.Info("Adding file to Bailian RAG")
+		fileId, err = client.AddFile(lis.LeaseId)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("File added successfully with ID: %s", fileId)
 	}
 
-	// Upload file
-	err = aliyun.UploadFile(lis.Method, lis.UploadURL, filePath, fmt.Sprint(contentType), fileContent, fmt.Sprintf("%s", bailianExtra))
-	if err != nil {
-		return err
-	}
-
-	log.Info("Adding file to Bailian RAG")
-	fileId, err := client.AddFile(lis.LeaseId)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("File added successfully with ID: %s", fileId)
-
-	// 如果用户没有选择跳过索引，则将文件添加到知识库索引
+	// 无论是新上传的文件还是使用已有文件，如果需要添加到索引，就执行索引步骤
 	if addToIndex && fileId != "" {
 		log.Infof("Adding file to knowledge index: %s", config.BailianKnowledgeIndexId)
 

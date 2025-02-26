@@ -40,5 +40,6 @@ func GetCommands() []cli.Command {
 		ValidateConfigCommand(),
 		IndexStatusCommand(),
 		IndexJobsListCommand(),
+		AddJobCommand(),
 	}
 }

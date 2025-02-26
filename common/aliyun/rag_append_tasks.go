@@ -2,8 +2,6 @@
 package aliyun
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -57,17 +55,7 @@ func (client *BailianClient) AppendDocumentsToIndex(documentIds []string) (strin
 
 		// 将响应数据转为JSON，然后从JSON中获取JobId
 		if response.Body.Data != nil {
-			// 先将响应数据转为字符串
-			jsonData, err := json.Marshal(response.Body.Data)
-			if err == nil {
-				// 尝试从JSON中解析JobId
-				var respMap map[string]interface{}
-				if err := json.Unmarshal(jsonData, &respMap); err == nil {
-					if jobIdValue, ok := respMap["JobId"]; ok {
-						jobId = fmt.Sprintf("%v", jobIdValue)
-					}
-				}
-			}
+			jobId = tea.StringValue(response.Body.Data.Id)
 
 			// 如果获取到了JobId，保存它
 			if jobId != "" {
