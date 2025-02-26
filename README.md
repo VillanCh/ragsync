@@ -64,6 +64,26 @@ RAG SYNC is a command-line tool for managing Alibaba Cloud Bailian knowledge bas
 
 ## 安装 | Installation
 
+### 方式一：Go Install（推荐）| Method 1: Go Install (Recommended)
+
+使用 Go 工具链直接安装：
+
+Install directly using the Go toolchain:
+
+```bash
+go install github.com/VillanCh/ragsync@latest
+```
+
+安装完成后，可以直接在命令行中使用 `ragsync` 命令。
+
+After installation, you can use the `ragsync` command directly in the command line.
+
+### 方式二：本地编译 | Method 2: Local Build
+
+如果您需要修改代码或从源码构建，可以按照以下步骤操作：
+
+If you need to modify the code or build from source, you can follow these steps:
+
 ```bash
 # 克隆仓库 | Clone the repository
 git clone https://github.com/VillanCh/ragsync.git
