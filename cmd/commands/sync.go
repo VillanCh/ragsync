@@ -17,8 +17,9 @@ import (
 // SyncCommand 上传文件命令
 func SyncCommand() cli.Command {
 	return cli.Command{
-		Name:  "sync",
-		Usage: "Apply for file upload lease",
+		Name:    "sync",
+		Aliases: []string{"upload"},
+		Usage:   "Apply for file upload lease",
 		Flags: []cli.Flag{
 			cli.StringFlag{
 				Name:  "file",

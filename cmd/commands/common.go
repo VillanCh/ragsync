@@ -36,5 +36,7 @@ func GetCommands() []cli.Command {
 		SyncCommand(),
 		ListCommand(),
 		StatusCommand(),
+		DeleteCommand(),
+		ValidateConfigCommand(),
 	}
 }

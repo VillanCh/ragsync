@@ -15,8 +15,9 @@ import (
 // ListCommand 列出文件命令
 func ListCommand() cli.Command {
 	return cli.Command{
-		Name:  "list",
-		Usage: "List files in workspace",
+		Name:    "list",
+		Aliases: []string{"ls"},
+		Usage:   "List files in workspace",
 		Flags: []cli.Flag{
 			cli.StringFlag{
 				Name:  "name",
