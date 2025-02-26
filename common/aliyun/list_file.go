@@ -19,6 +19,24 @@ type ListFilesResult struct {
 	Raw       any         `json:"raw"`
 }
 
+// removeFileExtension 移除文件名中的扩展名
+func removeFileExtension(fileName string) string {
+	if fileName == "" {
+		return ""
+	}
+
+	// 查找最后一个点的位置
+	lastDotIndex := strings.LastIndex(fileName, ".")
+	if lastDotIndex > 0 {
+		// 确保点不是文件名的第一个字符
+		log.Debugf("Removing extension from file name: %s", fileName)
+		fileName = fileName[:lastDotIndex]
+		log.Debugf("File name after removing extension: %s", fileName)
+	}
+
+	return fileName
+}
+
 // ListFile 列出工作空间下的文件
 func (client *BailianClient) ListFile(maxResults int32, nextToken string, fileName string) (*ListFilesResult, error) {
 	if client.config == nil {
@@ -31,6 +49,11 @@ func (client *BailianClient) ListFile(maxResults int32, nextToken string, fileNa
 
 	// 使用配置中的默认分类ID
 	categoryId := client.config.BailianFilesDefaultCategoryId
+
+	// 如果提供了文件名，移除扩展名
+	if fileName != "" {
+		fileName = removeFileExtension(fileName)
+	}
 
 	// 创建请求
 	listFileRequest := &bailian20231229.ListFileRequest{
@@ -112,6 +135,11 @@ func (client *BailianClient) ListFile(maxResults int32, nextToken string, fileNa
 
 // ListAllFiles 列出所有文件（自动处理分页）
 func (client *BailianClient) ListAllFiles(fileName string) ([]*FileInfo, error) {
+	// 如果提供了文件名，移除扩展名
+	if fileName != "" {
+		fileName = removeFileExtension(fileName)
+	}
+
 	allFiles := make([]*FileInfo, 0)
 	nextToken := ""
 
@@ -136,6 +164,11 @@ func (client *BailianClient) ListAllFiles(fileName string) ([]*FileInfo, error) 
 
 // ListAllFilesAsync 异步列出所有文件（自动处理分页），返回一个 channel
 func (client *BailianClient) ListAllFilesAsync(fileName string) (<-chan *FileInfo, <-chan error) {
+	// 如果提供了文件名，移除扩展名
+	if fileName != "" {
+		fileName = removeFileExtension(fileName)
+	}
+
 	fileChan := make(chan *FileInfo)
 	errChan := make(chan error, 1)
 
