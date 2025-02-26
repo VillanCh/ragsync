@@ -12,11 +12,14 @@ import (
 	"github.com/yaklang/yaklang/common/utils"
 )
 
+// Version 可以在编译时通过 -ldflags 注入
+var Version = "dev"
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "ragsync"
 	app.Usage = "Aliyun Bailian RAG Sync Tool"
-	app.Version = "0.1.0"
+	app.Version = Version
 
 	// 设置配置文件路径
 	baseConfigDir := filepath.Join(utils.GetHomeDirDefault("."), ".ragsync")

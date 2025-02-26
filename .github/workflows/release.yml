@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: 构建与发布
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: 获取版本号
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: 构建 Linux 版本
+        run: |
+          mkdir -p build
+          GOOS=linux GOARCH=amd64 go build -o build/ragsync-linux-amd64 -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
+
+      - name: 构建 macOS 版本
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -o build/ragsync-darwin-amd64 -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
+          GOOS=darwin GOARCH=arm64 go build -o build/ragsync-darwin-arm64 -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
+
+      - name: 构建 Windows 版本
+        run: |
+          GOOS=windows GOARCH=amd64 go build -o build/ragsync-windows-amd64.exe -ldflags "-s -w -X 'main.Version=${{ steps.get_version.outputs.VERSION }}'" ./cmd/ragsync/ragsync.go
+
+      - name: 创建 ZIP 文件
+        run: |
+          cd build
+          zip -r ragsync-linux-amd64.zip ragsync-linux-amd64
+          zip -r ragsync-darwin-amd64.zip ragsync-darwin-amd64
+          zip -r ragsync-darwin-arm64.zip ragsync-darwin-arm64
+          zip -r ragsync-windows-amd64.zip ragsync-windows-amd64.exe
+          cd ..
+
+      - name: 创建 Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+
+      - name: 上传 Linux 二进制文件
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/ragsync-linux-amd64.zip
+          asset_name: ragsync-linux-amd64.zip
+          asset_content_type: application/zip
+
+      - name: 上传 macOS (Intel) 二进制文件
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/ragsync-darwin-amd64.zip
+          asset_name: ragsync-darwin-amd64.zip
+          asset_content_type: application/zip
+
+      - name: 上传 macOS (Apple Silicon) 二进制文件
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/ragsync-darwin-arm64.zip
+          asset_name: ragsync-darwin-arm64.zip
+          asset_content_type: application/zip
+
+      - name: 上传 Windows 二进制文件
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/ragsync-windows-amd64.zip
+          asset_name: ragsync-windows-amd64.zip
+          asset_content_type: application/zip 

@@ -36,6 +36,11 @@ func SyncCommand() cli.Command {
 				Usage: "File extensions to upload when using --dir (comma separated, e.g. '.txt,.pdf,.md')",
 				Value: ".txt,.md,.markdown,.json,.pdf,.doc,.docx",
 			},
+			cli.StringFlag{
+				Name:  "exclude",
+				Usage: "Keywords to exclude files (comma separated, e.g. 'draft,temp,private')",
+				Value: "temp,private,unverified,unverified_,ignored",
+			},
 			cli.BoolFlag{
 				Name:  "force,f",
 				Usage: "Force upload even if file exists",
@@ -80,6 +85,17 @@ func executeSync(c *cli.Context) error {
 		c.Bool("override-newest-data"),
 		c.Bool("no-index"),
 		c.Bool("skip-index-delete"))
+
+	// 解析排除关键字
+	excludeKeywords := []string{}
+	if c.String("exclude") != "" {
+		excludeKeywords = strings.Split(c.String("exclude"), ",")
+		// 去除可能存在的空格
+		for i := range excludeKeywords {
+			excludeKeywords[i] = strings.TrimSpace(excludeKeywords[i])
+		}
+		log.Infof("Exclusion keywords: %v", excludeKeywords)
+	}
 
 	// 文件和目录参数必须至少提供一个
 	if filePath == "" && dirPath == "" {
@@ -131,16 +147,20 @@ func executeSync(c *cli.Context) error {
 		}
 
 		log.Infof("Processing directory upload with extensions: %v", extensions)
-		return processDirUpload(dirPath, extensions, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
+		return processDirUpload(dirPath, extensions, excludeKeywords, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 	}
 
 	// 处理单个文件上传
 	log.Infof("Processing single file upload: %s", filePath)
+	if containsExcludedKeywords(filePath, excludeKeywords) {
+		log.Infof("[File: %s] Skipped due to exclusion keywords", filePath)
+		return nil
+	}
 	return processFileUpload(filePath, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 }
 
 // processDirUpload 处理目录递归上传
-func processDirUpload(dirPath string, extensions []string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool, overrideNewestData bool) error {
+func processDirUpload(dirPath string, extensions []string, excludeKeywords []string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool, overrideNewestData bool) error {
 	log.Infof("[Dir: %s] Starting directory processing", dirPath)
 
 	// 检查目录是否存在
@@ -180,6 +200,13 @@ func processDirUpload(dirPath string, extensions []string, client *aliyun.Bailia
 		ext := strings.ToLower(filepath.Ext(path))
 		if !isExtensionAllowed(ext, extensions) {
 			log.Infof("[Dir: %s] Skipping file with unsupported extension: %s (ext: %s)", dirPath, path, ext)
+			skippedCount++
+			return nil
+		}
+
+		// 检查是否包含排除关键字
+		if containsExcludedKeywords(path, excludeKeywords) {
+			log.Infof("[Dir: %s] Skipping file containing excluded keywords: %s", dirPath, path)
 			skippedCount++
 			return nil
 		}
@@ -488,4 +515,24 @@ func askForConfirmation(s string) bool {
 
 	response = strings.ToLower(strings.TrimSpace(response))
 	return response == "y" || response == "yes"
+}
+
+// containsExcludedKeywords 检查文件名是否包含排除关键字
+func containsExcludedKeywords(filePath string, excludeKeywords []string) bool {
+	if len(excludeKeywords) == 0 {
+		return false
+	}
+
+	fileName := filepath.Base(filePath)
+	fileNameLower := strings.ToLower(fileName)
+
+	for _, keyword := range excludeKeywords {
+		if keyword == "" {
+			continue
+		}
+		if strings.Contains(fileNameLower, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
 }
