@@ -97,18 +97,6 @@ func executeSync(c *cli.Context) error {
 		log.Infof("Exclusion keywords: %v", excludeKeywords)
 	}
 
-	// 文件和目录参数必须至少提供一个
-	if filePath == "" && dirPath == "" {
-		log.Errorf("No file or directory path specified")
-		return utils.Errorf("Please specify either file path (--file) or directory path (--dir) to upload")
-	}
-
-	// 文件和目录参数不能同时提供
-	if filePath != "" && dirPath != "" {
-		log.Errorf("Both file and directory paths specified, only one is allowed")
-		return utils.Errorf("Cannot specify both --file and --dir at the same time")
-	}
-
 	forceUpload := c.Bool("force")
 	overrideNewestData := c.Bool("override-newest-data")
 	skipIndex := c.Bool("no-index")
@@ -138,6 +126,68 @@ func executeSync(c *cli.Context) error {
 	}
 	log.Infof("Bailian client created successfully")
 
+	// 如果既没有指定文件也没有指定目录，使用配置文件中的 include_paths
+	if filePath == "" && dirPath == "" {
+		if len(config.IncludePaths) == 0 {
+			log.Errorf("No file or directory path specified, and no include_paths in config")
+			return utils.Errorf("Please specify either file path (--file) or directory path (--dir) to upload, or configure include_paths in your config file")
+		}
+		log.Infof("No file or directory specified, using include_paths from config: %v", config.IncludePaths)
+
+		// 验证所有路径是否存在
+		var invalidPaths []string
+		for _, path := range config.IncludePaths {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				invalidPaths = append(invalidPaths, path)
+			}
+		}
+
+		if len(invalidPaths) > 0 {
+			log.Errorf("Some include paths do not exist: %v", invalidPaths)
+			return utils.Errorf("The following paths specified in include_paths do not exist: %v", invalidPaths)
+		}
+
+		// 处理所有有效的路径
+		for _, path := range config.IncludePaths {
+			log.Infof("Processing include path: %s", path)
+			// 检查路径是文件还是目录
+			pathInfo, err := os.Stat(path)
+			if err != nil {
+				log.Errorf("Failed to stat path %s: %v", path, err)
+				continue
+			}
+
+			if pathInfo.IsDir() {
+				// 如果是目录，使用目录处理逻辑
+				extensions := strings.Split(c.String("ext"), ",")
+				for i := range extensions {
+					extensions[i] = strings.TrimSpace(extensions[i])
+				}
+				if err := processDirUpload(path, extensions, excludeKeywords, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData); err != nil {
+					log.Errorf("Failed to process directory %s: %v", path, err)
+					continue
+				}
+			} else {
+				// 如果是文件，使用文件处理逻辑
+				if containsExcludedKeywords(path, excludeKeywords) {
+					log.Infof("[File: %s] Skipped due to exclusion keywords", path)
+					continue
+				}
+				if err := processFileUpload(path, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData); err != nil {
+					log.Errorf("Failed to process file %s: %v", path, err)
+					continue
+				}
+			}
+		}
+		return nil
+	}
+
+	// 文件和目录参数不能同时提供
+	if filePath != "" && dirPath != "" {
+		log.Errorf("Both file and directory paths specified, only one is allowed")
+		return utils.Errorf("Cannot specify both --file and --dir at the same time")
+	}
+
 	// 如果指定了目录，则遍历目录并上传符合条件的文件
 	if dirPath != "" {
 		extensions := strings.Split(c.String("ext"), ",")
@@ -161,6 +211,10 @@ func executeSync(c *cli.Context) error {
 
 // processDirUpload 处理目录递归上传
 func processDirUpload(dirPath string, extensions []string, excludeKeywords []string, client *aliyun.BailianClient, config *spec.Config, forceUpload, addToIndex, skipIndexDelete bool, overrideNewestData bool) error {
+	if strings.Trim(dirPath, "./") == "" {
+		return utils.Errorf("Directory path cannot be empty")
+	}
+
 	log.Infof("[Dir: %s] Starting directory processing", dirPath)
 
 	// 检查目录是否存在
@@ -173,6 +227,90 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 	if !dirInfo.IsDir() {
 		log.Errorf("[Dir: %s] The specified path is not a directory", dirPath)
 		return utils.Errorf("The specified path is not a directory: %s", dirPath)
+	}
+
+	// 获取目录的绝对路径
+	absDirPath, err := filepath.Abs(dirPath)
+	if err != nil {
+		log.Errorf("[Dir: %s] Failed to get absolute path: %v", dirPath, err)
+		return err
+	}
+
+	// 获取本地文件列表
+	localFiles := make(map[string]bool)
+	err = filepath.Walk(absDirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			// 检查文件扩展名是否符合要求
+			ext := strings.ToLower(filepath.Ext(path))
+			if isExtensionAllowed(ext, extensions) {
+				// 检查是否包含排除关键字
+				if !containsExcludedKeywords(path, excludeKeywords) {
+					// 使用相对路径作为键
+					relPath, err := filepath.Rel(absDirPath, path)
+					if err != nil {
+						log.Warnf("[Dir: %s] Failed to get relative path for %s: %v", dirPath, path, err)
+						return nil
+					}
+					key := filepath.Join(dirPath, relPath)
+					log.Infof("[Dir: %s] Found file: %s", dirPath, key)
+					localFiles[key] = true
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Errorf("[Dir: %s] Failed to scan local directory: %v", dirPath, err)
+		return err
+	}
+
+	// 获取远程文件列表
+	remoteFileRaw, err := client.ListAllFiles("")
+	if err != nil {
+		log.Errorf("[Dir: %s] Failed to list remote files: %v", dirPath, err)
+		return err
+	}
+
+	remoteFiles := make([]*aliyun.FileInfo, 0, len(remoteFileRaw))
+	for _, fileDesc := range remoteFileRaw {
+		dirPathWithoutDot := dirPath
+		for strings.HasPrefix(dirPathWithoutDot, "./") {
+			dirPathWithoutDot = strings.TrimPrefix(dirPathWithoutDot, "./")
+		}
+		fileWithoutDot := fileDesc.FileName
+		for strings.HasPrefix(fileWithoutDot, "./") {
+			fileWithoutDot = strings.TrimPrefix(fileWithoutDot, "./")
+		}
+		hasPrefix := strings.HasPrefix(fileWithoutDot, dirPathWithoutDot)
+		if hasPrefix {
+			log.Infof("[Dir: %s] Found remote file: %s", dirPath, fileDesc.FileName)
+			remoteFiles = append(remoteFiles, fileDesc)
+		}
+	}
+
+	// 找出需要删除的远程文件
+	var filesToDelete []string
+	for _, remoteFile := range remoteFiles {
+		// 检查远程文件是否在本地文件列表中
+		if have, ok := localFiles[remoteFile.FileName]; !ok || !have {
+			log.Infof("[Dir: %s] Remote file %s not found locally, will be deleted", dirPath, remoteFile.FileName)
+			filesToDelete = append(filesToDelete, remoteFile.FileId)
+		}
+	}
+
+	// 删除不在本地的远程文件
+	if len(filesToDelete) > 0 {
+		log.Infof("[Dir: %s] Deleting %d remote files that don't exist locally", dirPath, len(filesToDelete))
+		for _, fileId := range filesToDelete {
+			if err := client.DeleteFileEx(fileId, false); err != nil {
+				log.Errorf("[Dir: %s] Failed to delete remote file %s: %v", dirPath, fileId, err)
+				continue
+			}
+			log.Infof("[Dir: %s] Successfully deleted remote file %s", dirPath, fileId)
+		}
 	}
 
 	// 存储上传成功和失败的文件计数
@@ -239,8 +377,8 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 
 	// 打印处理结果摘要
 	log.Infof("[Dir: %s] Directory processing completed", dirPath)
-	log.Infof("[Dir: %s] Results: %d files processed, %d uploaded successfully, %d failed, %d skipped (wrong extension)",
-		dirPath, successCount+failedCount+skippedCount, successCount, failedCount, skippedCount)
+	log.Infof("[Dir: %s] Results: %d files processed, %d uploaded successfully, %d failed, %d skipped (wrong extension), %d remote files deleted",
+		dirPath, successCount+failedCount+skippedCount, successCount, failedCount, skippedCount, len(filesToDelete))
 
 	return nil
 }

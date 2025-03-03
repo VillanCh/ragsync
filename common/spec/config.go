@@ -13,12 +13,13 @@ type Config struct {
 	AliyunAccessKey string `yaml:"aliyun_access_key"`
 	AliyunSecretKey string `yaml:"aliyun_secret_key"`
 
-	BailianEndpoint               string `yaml:"aliyun_bailian_endpoint"`           // bailian.cn-beijing.aliyuncs.com
-	BailianCategoryType           string `yaml:"bailian_category_type"`             // UNSTRUCTURED
-	BailianWorkspaceId            string `yaml:"bailian_workspace_id"`              // fetch from bailian.console.aliyun.com
-	BailianAddFileParser          string `yaml:"bailian_add_file_parser"`           // DASHSCOPE_DOCMIND
-	BailianFilesDefaultCategoryId string `yaml:"bailian_files_default_category_id"` // default
-	BailianKnowledgeIndexId       string `yaml:"bailian_knowledge_index_id"`        // knowledge index id for RAG
+	BailianEndpoint               string   `yaml:"aliyun_bailian_endpoint"`           // bailian.cn-beijing.aliyuncs.com
+	BailianCategoryType           string   `yaml:"bailian_category_type"`             // UNSTRUCTURED
+	BailianWorkspaceId            string   `yaml:"bailian_workspace_id"`              // fetch from bailian.console.aliyun.com
+	BailianAddFileParser          string   `yaml:"bailian_add_file_parser"`           // DASHSCOPE_DOCMIND
+	BailianFilesDefaultCategoryId string   `yaml:"bailian_files_default_category_id"` // default
+	BailianKnowledgeIndexId       string   `yaml:"bailian_knowledge_index_id"`        // knowledge index id for RAG
+	IncludePaths                  []string `yaml:"include_paths"`                     // paths to include for sync
 }
 
 // 默认配置值
@@ -27,6 +28,7 @@ var defaultConfig = Config{
 	BailianCategoryType:           "UNSTRUCTURED",
 	BailianAddFileParser:          "DASHSCOPE_DOCMIND",
 	BailianFilesDefaultCategoryId: "default",
+	IncludePaths:                  []string{"./docs"}, // 默认包含 docs 目录
 }
 
 // Validate 验证配置是否有效
@@ -45,6 +47,9 @@ func (c *Config) Validate() error {
 	}
 	if c.BailianFilesDefaultCategoryId == "" {
 		return utils.Errorf("Bailian default category ID (BailianFilesDefaultCategoryId) cannot be empty")
+	}
+	if len(c.IncludePaths) == 0 {
+		log.Warn("Include paths cannot be empty")
 	}
 	return nil
 }
