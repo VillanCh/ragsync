@@ -56,6 +56,25 @@
 
 ## 最新更新 | Latest Updates
 
+### v1.0.4 到 v1.0.7 重要更新 | Important Updates from v1.0.4 to v1.0.7
+
+#### 增强的日志系统 | Enhanced Logging System
+- **文件处理详细日志** - 每个文件操作都有清晰的日志前缀，如 `[File: filename]` 或 `[Dir: dirname]`
+- **进度报告** - 批量处理时每 5 个文件显示一次进度
+- **错误定位** - 精确定位错误发生的文件和操作步骤
+- **时间戳信息** - 显示文件的修改时间和远程文件的创建时间比较结果
+
+#### 智能文件处理 | Smart File Processing
+- **自动跳过重复索引** - 检测到文件已在索引中时自动跳过
+- **时间戳智能比较** - 自动比较本地和远程文件的时间戳，避免覆盖较新的文件
+- **批量处理优化** - 改进了目录扫描和文件过滤的性能
+- **错误恢复机制** - 批量处理时单个文件失败不影响整体进度
+
+#### 新增命令参数 | New Command Parameters
+- **--override-newest-data** - 允许覆盖较新的远程文件（需要与 --force 一起使用）
+- **--ext** - 支持在批量上传时指定多个文件扩展名（如 ".txt,.pdf,.docx"）
+- **--skip-index-delete** - 更新文件时保留原有索引条目
+
 ### 版本功能增强 | Version Enhancements
 
 - **增强的日志系统**：添加了更详细的日志输出，方便快速定位问题
@@ -583,3 +602,41 @@ Before adding a file to the index, ragsync checks if the file is already in the 
 - If the file is already in the index, it will automatically skip the index addition step
 - Avoids duplicate indexing of files, saving resources and time
 - You can view detailed logs to understand the indexing status of files
+
+### 新功能使用示例 | New Features Usage Examples
+
+#### 智能时间戳处理 | Smart Timestamp Handling
+```bash
+# 上传文件时自动检查时间戳（如果远程文件较新会自动跳过）
+ragsync sync --file document.pdf
+
+# 查看详细的时间戳比较日志
+[File: document.pdf] Local file modified: 2024-03-20 10:30:00
+[File: document.pdf] Remote file created: 2024-03-20 11:00:00
+[File: document.pdf] Skipping upload: remote file is newer
+
+# 强制覆盖较新的远程文件
+ragsync sync --file document.pdf --force --override-newest-data
+```
+
+#### 批量处理与进度报告 | Batch Processing and Progress Reporting
+```bash
+# 上传目录中的所有 PDF 和 DOCX 文件，显示进度
+ragsync sync --dir /path/to/docs --ext ".pdf,.docx"
+
+# 查看详细的进度日志
+[Dir: /path/to/docs] Scanning directory...
+[File: doc1.pdf] Processing... Done
+[File: doc2.docx] Processing... Done
+[Progress] Processed 5/20 files (25%)
+```
+
+#### 索引优化 | Index Optimization
+```bash
+# 更新文件但保留原有索引（适用于小幅更新）
+ragsync sync --file document.pdf --force --skip-index-delete
+
+# 自动检测并跳过已索引文件
+[File: document.pdf] Checking index status...
+[File: document.pdf] Document already indexed, skipping index addition
+```
