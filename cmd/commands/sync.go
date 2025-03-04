@@ -292,13 +292,51 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 	}
 
 	// 找出需要删除的远程文件
-	var filesToDelete []string
+	var filesToDelete = make(map[string]string)
+	var skippedFiles = make(map[string]bool)
+	var uploadFiles []string
 	for _, remoteFile := range remoteFiles {
 		// 检查远程文件是否在本地文件列表中
 		if have, ok := localFiles[remoteFile.FileName]; !ok || !have {
 			log.Infof("[Dir: %s] Remote file %s not found locally, will be deleted", dirPath, remoteFile.FileName)
-			filesToDelete = append(filesToDelete, remoteFile.FileId)
+			filesToDelete[remoteFile.FileName] = remoteFile.FileId
+			continue
+		} else if remoteFile.CreateTime != "" {
+			// 解析远程文件创建时间
+			remoteCreateTime, parseErr := time.Parse("2006-01-02 15:04:05", remoteFile.CreateTime)
+			if parseErr != nil {
+				log.Warnf("[Dir: %s] Failed to parse remote file time for %s: %v", dirPath, remoteFile.FileName, parseErr)
+			} else {
+				// 获取本地文件信息
+				localFilePath := remoteFile.FileName
+				localFileInfo, statErr := os.Stat(localFilePath)
+				if statErr != nil {
+					log.Warnf("[Dir: %s] Failed to get local file info for %s: %v", dirPath, localFilePath, statErr)
+				} else {
+					// 比较本地文件修改时间和远程文件创建时间
+					localModTime := localFileInfo.ModTime()
+					if !localModTime.After(remoteCreateTime) && !overrideNewestData {
+						log.Infof("[Dir: %s] Remote file %s is newer than local file, skipping", dirPath, remoteFile.FileName)
+						skippedFiles[remoteFile.FileName] = true
+						continue
+					}
+				}
+			}
 		}
+	}
+
+	log.Infof("[Dir: %s] Found %d local files", dirPath, len(localFiles))
+	for localFilename := range localFiles {
+		if _, ok := skippedFiles[localFilename]; ok {
+			log.Infof("[Dir: %s] Skipping file because it was skipped earlier: %s", dirPath, localFilename)
+			continue
+		}
+		if _, ok := filesToDelete[localFilename]; ok {
+			log.Infof("[Dir: %s] Skipping file because it was marked for deletion: %s", dirPath, localFilename)
+			continue
+		}
+		log.Infof("[Dir: %s] Uploading file: %s", dirPath, localFilename)
+		uploadFiles = append(uploadFiles, localFilename)
 	}
 
 	// 删除不在本地的远程文件
@@ -321,17 +359,17 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 	log.Infof("[Dir: %s] Scanning directory", dirPath)
 	log.Infof("[Dir: %s] File extensions to process: %s", dirPath, strings.Join(extensions, ", "))
 
-	// 遍历目录中的所有文件
-	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	for _, path := range uploadFiles {
+		info, err := os.Stat(path)
 		if err != nil {
 			log.Warnf("[Dir: %s] Error accessing path %s: %v", dirPath, path, err)
-			return nil
+			continue
 		}
 
 		// 跳过目录
 		if info.IsDir() {
-			log.Debugf("[Dir: %s] Skipping directory: %s", dirPath, path)
-			return nil
+			log.Infof("[Dir: %s] Skipping directory: %s", dirPath, path)
+			continue
 		}
 
 		// 检查文件扩展名是否符合要求
@@ -339,14 +377,14 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		if !isExtensionAllowed(ext, extensions) {
 			log.Infof("[Dir: %s] Skipping file with unsupported extension: %s (ext: %s)", dirPath, path, ext)
 			skippedCount++
-			return nil
+			continue
 		}
 
 		// 检查是否包含排除关键字
 		if containsExcludedKeywords(path, excludeKeywords) {
 			log.Infof("[Dir: %s] Skipping file containing excluded keywords: %s", dirPath, path)
 			skippedCount++
-			return nil
+			continue
 		}
 
 		log.Infof("[Dir: %s] Processing file (%d processed so far): %s", dirPath, successCount+failedCount, path)
@@ -355,24 +393,15 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		err = processFileUpload(path, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 		if err != nil {
 			log.Errorf("[Dir: %s] Failed to upload file %s: %v", dirPath, path, err)
-			failedCount++
 		} else {
 			log.Infof("[Dir: %s] Successfully processed file: %s", dirPath, path)
-			successCount++
-		}
 
+		}
 		// 显示进度报告
 		if (successCount+failedCount)%5 == 0 {
 			log.Infof("[Dir: %s] Progress: %d files processed (%d success, %d failed, %d skipped)",
 				dirPath, successCount+failedCount+skippedCount, successCount, failedCount, skippedCount)
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		log.Errorf("[Dir: %s] Failed to walk directory: %v", dirPath, err)
-		return utils.Errorf("Failed to walk directory: %v", err)
 	}
 
 	// 打印处理结果摘要
