@@ -291,6 +291,12 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		}
 	}
 
+	// 存储上传成功和失败的文件计数
+	successCount := 0
+	failedCount := 0
+	skippedCount := 0
+	deletedCount := 0
+
 	// 找出需要删除的远程文件
 	var filesToDelete = make(map[string]string)
 	var skippedFiles = make(map[string]bool)
@@ -300,6 +306,7 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		if have, ok := localFiles[remoteFile.FileName]; !ok || !have {
 			log.Infof("[Dir: %s] Remote file %s not found locally, will be deleted", dirPath, remoteFile.FileName)
 			filesToDelete[remoteFile.FileName] = remoteFile.FileId
+			deletedCount++
 			continue
 		} else if remoteFile.CreateTime != "" {
 			// 解析远程文件创建时间
@@ -318,6 +325,7 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 					if !localModTime.After(remoteCreateTime) && !overrideNewestData {
 						log.Infof("[Dir: %s] Remote file %s is newer than local file, skipping", dirPath, remoteFile.FileName)
 						skippedFiles[remoteFile.FileName] = true
+						skippedCount++
 						continue
 					}
 				}
@@ -351,11 +359,6 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		}
 	}
 
-	// 存储上传成功和失败的文件计数
-	successCount := 0
-	failedCount := 0
-	skippedCount := 0
-
 	log.Infof("[Dir: %s] Scanning directory", dirPath)
 	log.Infof("[Dir: %s] File extensions to process: %s", dirPath, strings.Join(extensions, ", "))
 
@@ -363,12 +366,14 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		info, err := os.Stat(path)
 		if err != nil {
 			log.Warnf("[Dir: %s] Error accessing path %s: %v", dirPath, path, err)
+			failedCount++
 			continue
 		}
 
 		// 跳过目录
 		if info.IsDir() {
 			log.Infof("[Dir: %s] Skipping directory: %s", dirPath, path)
+			skippedCount++
 			continue
 		}
 
@@ -393,9 +398,10 @@ func processDirUpload(dirPath string, extensions []string, excludeKeywords []str
 		err = processFileUpload(path, client, config, forceUpload, addToIndex, skipIndexDelete, overrideNewestData)
 		if err != nil {
 			log.Errorf("[Dir: %s] Failed to upload file %s: %v", dirPath, path, err)
+			failedCount++
 		} else {
 			log.Infof("[Dir: %s] Successfully processed file: %s", dirPath, path)
-
+			successCount++
 		}
 		// 显示进度报告
 		if (successCount+failedCount)%5 == 0 {
