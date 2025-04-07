@@ -110,64 +110,6 @@ func executeCreateConfig(c *cli.Context) error {
 		}
 	}
 
-	// 百炼知识库索引ID
-	fmt.Println("\nAvailable indices:")
-	indices, err := aliyun.ListIndices(config.AliyunAccessKey, config.AliyunSecretKey, config.BailianWorkspaceId)
-	if err != nil {
-		log.Warnf("Failed to list indices: %v", err)
-		fmt.Println("Warning: Could not fetch existing indices. You can still proceed with manual input.")
-	} else {
-		fmt.Printf("%-40s %-50s\n", "Index ID", "Index Name")
-		fmt.Println(strings.Repeat("-", 90))
-		for _, idx := range indices {
-			fmt.Printf("%-40s %-50s\n", idx.IndexId, idx.IndexName)
-		}
-		fmt.Println()
-	}
-
-	fmt.Print("Bailian Knowledge Index ID (BailianKnowledgeIndexId): ")
-	indexId := readLine()
-
-	if indexId == "" {
-		fmt.Print("\nNo index ID provided. Would you like to create a new index? (y/n): ")
-		createNew := readLine()
-		if strings.ToLower(createNew) == "y" {
-			fmt.Print("Enter new index name: ")
-			indexName := readLine()
-			if indexName == "" {
-				return utils.Errorf("Index name cannot be empty")
-			}
-			err := aliyun.CreateIndex(config.AliyunAccessKey, config.AliyunSecretKey, config.BailianWorkspaceId, indexName)
-			if err != nil {
-				return utils.Errorf("Failed to create index: %v", err)
-			}
-			fmt.Println("Index created successfully. Please run the command again to select the new index.")
-			return nil
-		} else {
-			return utils.Errorf("Bailian Knowledge Index ID is required, plz check your knowledge index id in https://bailian.console.aliyun.com")
-		}
-	} else {
-		// 验证索引ID是否存在
-		if err == nil {
-			found := false
-			for _, idx := range indices {
-				if idx.IndexId == indexId {
-					found = true
-					break
-				}
-			}
-			if !found {
-				fmt.Printf("\nWarning: Index ID '%s' not found in the list of available indices.\n", indexId)
-				fmt.Print("Do you want to proceed anyway? (y/n): ")
-				confirm := readLine()
-				if strings.ToLower(confirm) != "y" {
-					return utils.Errorf("Please provide a valid index ID")
-				}
-			}
-		}
-		config.BailianKnowledgeIndexId = indexId
-	}
-
 	// 百炼默认分类ID
 	fmt.Println("\nAvailable categories:")
 	categories, err := aliyun.ListCategories(config.AliyunAccessKey, config.AliyunSecretKey, config.BailianWorkspaceId)
@@ -229,6 +171,64 @@ func executeCreateConfig(c *cli.Context) error {
 			}
 		}
 		config.BailianFilesDefaultCategoryId = categoryId
+	}
+
+	// 百炼知识库索引ID
+	fmt.Println("\nAvailable indices:")
+	indices, err := aliyun.ListIndices(config.AliyunAccessKey, config.AliyunSecretKey, config.BailianWorkspaceId)
+	if err != nil {
+		log.Warnf("Failed to list indices: %v", err)
+		fmt.Println("Warning: Could not fetch existing indices. You can still proceed with manual input.")
+	} else {
+		fmt.Printf("%-40s %-50s\n", "Index ID", "Index Name")
+		fmt.Println(strings.Repeat("-", 90))
+		for _, idx := range indices {
+			fmt.Printf("%-40s %-50s\n", idx.IndexId, idx.IndexName)
+		}
+		fmt.Println()
+	}
+
+	fmt.Print("Bailian Knowledge Index ID (BailianKnowledgeIndexId): ")
+	indexId := readLine()
+
+	if indexId == "" {
+		fmt.Print("\nNo index ID provided. Would you like to create a new index? (y/n): ")
+		createNew := readLine()
+		if strings.ToLower(createNew) == "y" {
+			fmt.Print("Enter new index name: ")
+			indexName := readLine()
+			if indexName == "" {
+				return utils.Errorf("Index name cannot be empty")
+			}
+			err := aliyun.CreateIndex(config.AliyunAccessKey, config.AliyunSecretKey, config.BailianWorkspaceId, indexName, "DATA_CENTER_CATEGORY", []string{config.BailianFilesDefaultCategoryId})
+			if err != nil {
+				return utils.Errorf("Failed to create index: %v", err)
+			}
+			fmt.Println("Index created successfully. Please run the command again to select the new index.")
+			return nil
+		} else {
+			return utils.Errorf("Bailian Knowledge Index ID is required, plz check your knowledge index id in https://bailian.console.aliyun.com")
+		}
+	} else {
+		// 验证索引ID是否存在
+		if err == nil {
+			found := false
+			for _, idx := range indices {
+				if idx.IndexId == indexId {
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("\nWarning: Index ID '%s' not found in the list of available indices.\n", indexId)
+				fmt.Print("Do you want to proceed anyway? (y/n): ")
+				confirm := readLine()
+				if strings.ToLower(confirm) != "y" {
+					return utils.Errorf("Please provide a valid index ID")
+				}
+			}
+		}
+		config.BailianKnowledgeIndexId = indexId
 	}
 
 	// 百炼服务端点

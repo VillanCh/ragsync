@@ -82,7 +82,7 @@ func ListIndices(accessKey, secretKey, workspaceId string) ([]Index, error) {
 	return indices, nil
 }
 
-func CreateIndex(accessKey, secretKey, workspaceId, name string) error {
+func CreateIndex(accessKey, secretKey, workspaceId, name, sourceType string, categoryIds []string) error {
 	config := &spec.Config{
 		AliyunAccessKey:    accessKey,
 		AliyunSecretKey:    secretKey,
@@ -95,7 +95,11 @@ func CreateIndex(accessKey, secretKey, workspaceId, name string) error {
 	}
 
 	request := &bailian20231229.CreateIndexRequest{
-		Name: tea.String(name),
+		Name:          tea.String(name),
+		StructureType: tea.String("unstructured"),
+		SourceType:    tea.String(sourceType),
+		CategoryIds:   tea.StringSlice(categoryIds),
+		SinkType:      tea.String("BUILT_IN"),
 	}
 	runtime := &util.RuntimeOptions{}
 	headers := make(map[string]*string)
