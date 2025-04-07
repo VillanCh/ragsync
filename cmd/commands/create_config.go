@@ -15,7 +15,7 @@ import (
 	"github.com/yaklang/yaklang/common/utils"
 )
 
-// CreateConfigCommand 创建配置文件命令
+// CreateConfigCommand creates configuration file command
 func CreateConfigCommand() cli.Command {
 	return cli.Command{
 		Name:  "create-config",
@@ -26,55 +26,88 @@ func CreateConfigCommand() cli.Command {
 				Usage: "Output path for the configuration file",
 				Value: "",
 			},
+			cli.StringFlag{
+				Name:  "ak, access-key",
+				Usage: "Aliyun Access Key",
+				Value: "",
+			},
+			cli.StringFlag{
+				Name:  "sk, secret-key",
+				Usage: "Aliyun Secret Key",
+				Value: "",
+			},
+			cli.StringFlag{
+				Name:  "workspace-id, wid",
+				Usage: "Bailian Workspace ID",
+				Value: "",
+			},
 		},
 		Action: executeCreateConfig,
 	}
 }
 
-// executeCreateConfig 创建配置文件的执行逻辑
+// executeCreateConfig executes the configuration file creation logic
 func executeCreateConfig(c *cli.Context) error {
 	configPath := c.GlobalString("config")
 	if configPath == "" {
 		return utils.Errorf("Configuration file path not specified")
 	}
 
-	// 获取默认配置
+	// Print help message
+	fmt.Println("\nUsage:")
+	fmt.Println("  ragsync create-config [options]")
+	fmt.Println("\nOptions:")
+	fmt.Println("  --ak, --access-key     Aliyun Access Key")
+	fmt.Println("  --sk, --secret-key     Aliyun Secret Key")
+	fmt.Println("  --workspace-id, --wid  Bailian Workspace ID")
+	fmt.Println("  --output, -o           Output path for the configuration file")
+	fmt.Println("\nExample:")
+	fmt.Println("  ragsync create-config --ak your-access-key --sk your-secret-key --wid your-workspace-id")
+	fmt.Println()
+
+	// Get default configuration
 	defaultCfg := spec.GetDefaultConfig()
 
-	// 创建一个新的配置结构
+	// Create a new configuration structure
 	config := spec.Config{}
 
-	// 创建一个带缓冲的读取器，用于读取控制台输入
+	// Create a buffered reader for console input
 	reader := bufio.NewReader(os.Stdin)
 
-	// 用于读取单行输入的函数
+	// Function to read a single line
 	readLine := func() string {
 		input, _ := reader.ReadString('\n')
 		return strings.TrimSpace(input)
 	}
 
-	// 引导用户逐个输入配置项
-	fmt.Println("Please enter configuration items sequentially (press Enter to use default values):")
-
-	// 阿里云访问密钥
-	fmt.Print("Aliyun Access Key (AliyunAccessKey): ")
-	config.AliyunAccessKey = readLine()
+	// Get Aliyun Access Key from command line or prompt
+	config.AliyunAccessKey = c.String("ak")
 	if config.AliyunAccessKey == "" {
-		return utils.Errorf("Aliyun Access Key is required")
+		fmt.Print("Aliyun Access Key (AliyunAccessKey): ")
+		config.AliyunAccessKey = readLine()
+		if config.AliyunAccessKey == "" {
+			return utils.Errorf("Aliyun Access Key is required")
+		}
 	}
 
-	// 阿里云密钥
-	fmt.Print("Aliyun Secret Key (AliyunSecretKey): ")
-	config.AliyunSecretKey = readLine()
+	// Get Aliyun Secret Key from command line or prompt
+	config.AliyunSecretKey = c.String("sk")
 	if config.AliyunSecretKey == "" {
-		return utils.Errorf("Aliyun Secret Key is required")
+		fmt.Print("Aliyun Secret Key (AliyunSecretKey): ")
+		config.AliyunSecretKey = readLine()
+		if config.AliyunSecretKey == "" {
+			return utils.Errorf("Aliyun Secret Key is required")
+		}
 	}
 
-	// 百炼工作空间ID
-	fmt.Print("Bailian Workspace ID (BailianWorkspaceId): ")
-	config.BailianWorkspaceId = readLine()
+	// Get Bailian Workspace ID from command line or prompt
+	config.BailianWorkspaceId = c.String("workspace-id")
 	if config.BailianWorkspaceId == "" {
-		return utils.Errorf("Bailian Workspace ID is required, plz check your workspace id in https://bailian.console.aliyun.com")
+		fmt.Print("Bailian Workspace ID (BailianWorkspaceId): ")
+		config.BailianWorkspaceId = readLine()
+		if config.BailianWorkspaceId == "" {
+			return utils.Errorf("Bailian Workspace ID is required, plz check your workspace id in https://bailian.console.aliyun.com")
+		}
 	}
 
 	// 百炼知识库索引ID
