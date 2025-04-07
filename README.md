@@ -56,6 +56,14 @@
 
 ## 最新更新 | Latest Updates
 
+### v1.0.8 重要更新 | Important Updates in v1.0.8
+
+#### 索引创建增强 | Enhanced Index Creation
+- **分类优先创建** - 调整了配置流程，确保在创建索引前先创建或选择分类
+- **索引参数完善** - 添加了 SourceType 和 CategoryIds 参数支持
+- **默认参数优化** - 设置默认 StructureType 为 unstructured，SinkType 为 BUILT_IN
+- **分类关联** - 创建索引时自动关联已选择的分类
+
 ### v1.0.4 到 v1.0.7 重要更新 | Important Updates from v1.0.4 to v1.0.7
 
 #### 增强的日志系统 | Enhanced Logging System
